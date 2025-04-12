@@ -1,50 +1,51 @@
-name: Daily YouTube Upload
+name: Auto YouTube Upload
 
 on:
-  schedule:
-    - cron: '0 10 * * *'  # 매일 한국 시간 19시 (UTC+9)
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'  # 매일 한국 시간 12:00 PM 실행
 
 jobs:
   upload:
     runs-on: ubuntu-latest
+    timeout-minutes: 45  # 타임아웃 설정
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg  # moviepy 필수 패키지
 
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Create static folder
-        run: |
-          mkdir -p static
-          curl -o static/bg.png https://via.placeholder.com/1280x720.png
-          curl -o static/music.mp3 https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3
+    - name: Create static directory
+      run: mkdir -p static  # 필수 디렉토리 생성
 
-      - name: Run automation
-        env:
-          OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
-          OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
-          OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
-          OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
-          OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 }}
-          OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 }}
-          OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 }}
-          OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 }}
-          OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
-          OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: python secure_main.py
-
+    - name: Run Main Script
+      env:
+        OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
+        OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
+        OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
+        OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
+        OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 }}
+        OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 }}
+        OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 }}
+        OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 }}
+        OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
+        OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+      run: |
+        python secure_main.py
