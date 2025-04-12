@@ -10,6 +10,10 @@ from PIL import Image, ImageDraw, ImageFont
 from pytrends.request import TrendReq
 from youtube_upload import upload_video
 import moviepy.editor as mp
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
 
 # ========== 환경 변수 검증 ==========
 def validate_environment():
@@ -26,7 +30,7 @@ def validate_environment():
 
 validate_environment()
 
-# ========== OpenAI 클라이언트 초기화 (프록시 설정 제거) ==========
+# ========== OpenAI 클라이언트 초기화 ==========
 OPENAI_KEYS = [os.getenv(f"OPENAI_API_KEY_{i}") for i in range(1, 11)]
 current_key_index = random.randint(0, 9)
 
@@ -34,10 +38,8 @@ def get_openai_client():
     global current_key_index
     for _ in range(len(OPENAI_KEYS)):
         key = OPENAI_KEYS[current_key_index]
-        
         try:
-            # 프록시 매개변수 완전 제거 ▼
-            client = OpenAI(api_key=key)  # proxies={...} 삭제
+            client = OpenAI(api_key=key)
             client.models.list()
             return client
         except Exception as e:
@@ -45,11 +47,11 @@ def get_openai_client():
             current_key_index = (current_key_index + 1) % len(OPENAI_KEYS)
     raise RuntimeError("🚨 모든 OpenAI API 키가 유효하지 않습니다.")
 
-# ========== Google 트렌드 조회 (404 오류 해결) ==========
+# ========== Google 트렌드 조회 ==========
 def fetch_trend_keyword():
     try:
-        pytrends = TrendReq(hl='ko-KR', tz=540)  # 한국 설정 강화
-        df = pytrends.trending_searches(pn='south_korea')  # 올바른 지역 코드
+        pytrends = TrendReq(hl='ko-KR', tz=540)  # 한국 시간대 설정
+        df = pytrends.trending_searches(pn='united_states')  # 지원되는 지역 코드
         return df[0].values[0] if not df.empty else "AI 자동화"
     except Exception as e:
         print(f"⚠️ 트렌드 조회 실패: {str(e)[:100]}")
@@ -111,7 +113,7 @@ def render_video(script_lines):
         for idx, line in enumerate(script_lines):
             img = bg_image.copy()
             draw = ImageDraw.Draw(img)
-            font = ImageFont.truetype("malgun.ttf", 60)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60)
             text_width = draw.textlength(line, font=font)
             draw.text(((1920 - text_width) // 2, 500), line, font=font, fill="white")
             img.save(f"static/frame_{idx}.png")
@@ -123,6 +125,55 @@ def render_video(script_lines):
     except Exception as e:
         print(f"🚨 영상 생성 실패: {str(e)[:100]}")
         raise
+
+# ========== 유튜브 업로드 ==========
+def upload_video(video_path, title, description, tags):
+    required_env_vars = [
+        'GOOGLE_CLIENT_ID',
+        'GOOGLE_CLIENT_SECRET',
+        'GOOGLE_REFRESH_TOKEN'
+    ]
+    missing = [var for var in required_env_vars if not os.getenv(var)]
+    if missing:
+        raise ValueError(f"⚠️ 필수 환경 변수 누락: {', '.join(missing)}")
+
+    for attempt in range(3):
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+            )
+            
+            youtube = build("youtube", "v3", credentials=creds)
+            request_body = {
+                "snippet": {
+                    "categoryId": "22",
+                    "title": title[:95] + "..." if len(title) > 100 else title,
+                    "description": description[:4500],
+                    "tags": tags[:30]
+                },
+                "status": {"privacyStatus": "public"}
+            }
+            
+            media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+            response = youtube.videos().insert(
+                part="snippet,status",
+                body=request_body,
+                media_body=media
+            ).execute()
+            
+            print(f"✅ 업로드 성공! 영상 URL: https://youtu.be/{response['id']}")
+            return
+        except HttpError as e:
+            print(f"⚠️ YouTube API 오류 ({attempt+1}/3): {str(e)[:100]}")
+            time.sleep(10)
+        except Exception as e:
+            print(f"⚠️ 업로드 실패 ({attempt+1}/3): {str(e)[:100]}")
+            time.sleep(10)
+    print("🚨 모든 업로드 시도 실패")
 
 # ========== 메인 실행 ==========
 if __name__ == "__main__":
