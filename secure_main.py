@@ -51,8 +51,7 @@ def get_openai_client():
 def fetch_trend_keyword():
     try:
         pytrends = TrendReq(hl='ko-KR', tz=540)  # 한국 시간대 설정
-        # 'united_states' 대신 'south_korea'로 변경
-        df = pytrends.trending_searches(pn='south_korea')  
+        df = pytrends.trending_searches(pn='united_states')  # 지원되는 지역 코드
         return df[0].values[0] if not df.empty else "AI 자동화"
     except Exception as e:
         print(f"⚠️ 트렌드 조회 실패: {str(e)[:100]}")
