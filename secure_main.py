@@ -39,7 +39,7 @@ def get_openai_client():
     for _ in range(len(OPENAI_KEYS)):
         key = OPENAI_KEYS[current_key_index]
         try:
-            client = OpenAI(api_key=key)
+            client = OpenAI(api_key=key)  # `proxies` 관련 설정 제거
             client.models.list()
             return client
         except Exception as e:
@@ -51,11 +51,12 @@ def get_openai_client():
 def fetch_trend_keyword():
     try:
         pytrends = TrendReq(hl='ko-KR', tz=540)  # 한국 시간대 설정
-        df = pytrends.trending_searches(pn='united_states')  # 지원되는 지역 코드
+        # 'united_states' 대신 'south_korea'로 변경
+        df = pytrends.trending_searches(pn='south_korea')  
         return df[0].values[0] if not df.empty else "AI 자동화"
     except Exception as e:
         print(f"⚠️ 트렌드 조회 실패: {str(e)[:100]}")
-        return "AI 자동화"
+        return "AI 자동화"  # 기본 키워드 반환
 
 # ========== AI 스크립트 생성 ==========
 def generate_video_script(keyword):
