@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4  # 최신 버전 사용
+      uses: actions/checkout@v4
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -32,7 +32,7 @@ jobs:
 
     - name: Run Main Script
       env:
-        # OpenAI API Keys (GitHub Secrets에 등록된 이름과 정확히 일치)
+        # OpenAI API Keys
         OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
         OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
         OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
@@ -44,7 +44,7 @@ jobs:
         OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
         OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
         # Google API Keys
-        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}          # 주의: Secrets 이름 변경!
-        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}  # 주의: Secrets 이름 변경!
-        GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}  # 주의: Secrets 이름 변경!
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
       run: python secure_main.py
