@@ -1,5 +1,7 @@
 # secure_main.py
 
+os.makedirs("static/audio", exist_ok=True)
+os.makedirs("static/video", exist_ok=True)
 import os
 import random
 import time
