@@ -1,59 +1,53 @@
-# secure_main.py
-
 import os
+import random
 import time
-from dotenv import load_dotenv
-from openai_rotate import get_openai_api_key
-from trending import get_trending_topic
-from utils import text_to_speech, create_video as make_video, clean_folder
+from secure_generate_script import generate_script
+from secure_text_to_audio import text_to_audio
+from secure_generate_video import generate_video
 from youtube_upload import upload_video
-from thumbnail import create_thumbnail
+from pytrends.request import TrendReq
 
-# .env 파일 로드
-load_dotenv()
+# 최대 업로드 수 설정 (YouTube API 제한에 맞춤)
+MAX_VIDEOS_PER_DAY = 6
 
-# OpenAI API 키 로테이션
-OPENAI_API_KEY = get_openai_api_key()
+# OpenAI 키 목록에서 무작위 선택
+OPENAI_KEYS = [os.getenv(f"OPENAI_API_KEY_{i}") for i in range(1, 11)]
 
-# ElevenLabs API 키 로드
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_KEY")
-VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-
-def retry_text_to_speech(content, topic, retries=3):
-    for _ in range(retries):
-        try:
-            return text_to_speech(content, topic)
-        except Exception as e:
-            print(f"음성 생성 오류 발생: {e}. 재시도 중...")
-            time.sleep(5)  # 5초 후 재시도
-    raise Exception("음성 생성에 실패했습니다.")
+def get_trending_keywords():
+    pytrends = TrendReq(hl='ko', tz=540)
+    pytrends.build_payload(kw_list=['뉴스'])
+    trending = pytrends.related_queries()['뉴스']['top']
+    return [row['query'] for row in trending.head(MAX_VIDEOS_PER_DAY).to_dict('records')]
 
 def main():
-    # 폴더 정리
-    clean_folder()
+    trending_keywords = get_trending_keywords()
+    print(f"오늘의 트렌드 주제: {trending_keywords}")
 
-    # 트렌드 주제 가져오기
-    topic = get_trending_topic()
-    print(f"[1] 트렌드 주제 추출 완료: {topic}")
+    for i, keyword in enumerate(trending_keywords):
+        print(f"\n[{i+1}/{len(trending_keywords)}] '{keyword}' 콘텐츠 생성 시작")
 
-    # 콘텐츠 생성
-    content = f"{topic}에 대해 오늘 알아보겠습니다. 많은 관심을 받고 있는 주제입니다."
+        # API Key 무작위 선택
+        openai_api_key = random.choice(OPENAI_KEYS)
 
-    # 음성 생성 (재시도 함수 사용)
-    audio_path = retry_text_to_speech(content, topic)
-    print(f"[2] 오디오 저장 완료: {audio_path}")
+        try:
+            script_text = generate_script(keyword, openai_api_key=openai_api_key)
+            audio_path = text_to_audio(script_text, f"audio_{i}.mp3")
+            video_path = generate_video(script_text, audio_path, f"video_{i}.mp4")
 
-    # 썸네일 생성
-    thumbnail_path = create_thumbnail(content, topic)
-    print(f"[3] 썸네일 생성 완료: {thumbnail_path}")
+            upload_video(
+                video_path=video_path,
+                title=f"{keyword} | 오늘의 트렌드 뉴스",
+                description=script_text,
+                tags=[keyword, "트렌드", "뉴스", "인공지능"]
+            )
 
-    # 영상 생성
-    video_path = make_video(topic, audio_path, thumbnail_path)
-    print(f"[4] 영상 생성 완료: {video_path}")
+            print(f"'{keyword}' 영상 업로드 완료.\n")
 
-    # YouTube 업로드
-    upload_video(video_path, title=topic, description=f"{topic}에 대한 자동 생성 콘텐츠입니다.", thumbnail_path=thumbnail_path)
-    print("[5] YouTube 업로드 완료 🎉")
+            # 업로드 사이 시간 간격(1분): 유튜브 API 연속 요청 방지
+            time.sleep(60)
+
+        except Exception as e:
+            print(f"에러 발생: {e}")
 
 if __name__ == "__main__":
     main()

@@ -1,22 +1,18 @@
+# thumbnail.py
 from PIL import Image, ImageDraw, ImageFont
 import os
+from datetime import datetime
 
-def create_thumbnail(text, topic):
-    # 기본 이미지 크기 설정
+def create_thumbnail(content, topic):
     width, height = 1280, 720
-    image = Image.new("RGB", (width, height), (255, 255, 255))
-    draw = ImageDraw.Draw(image)
-    
-    # 폰트 설정 (시스템에 따라 경로를 맞춰야 할 수 있음)
-    font = ImageFont.load_default()
-    
-    # 텍스트 추가 (중앙 정렬)
-    text_width, text_height = draw.textsize(text, font=font)
-    text_position = ((width - text_width) // 2, (height - text_height) // 2)
-    draw.text(text_position, text, font=font, fill="black")
-    
-    # 썸네일 파일 저장
-    thumbnail_path = f"static/thumbnails/{topic}_thumbnail.jpg"
-    image.save(thumbnail_path)
-    return thumbnail_path
+    thumbnail = Image.new("RGB", (width, height), color=(30, 30, 30))
+    draw = ImageDraw.Draw(thumbnail)
+
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # 또는 업로드한 .ttf 경로
+    font = ImageFont.truetype(font_path, 48)
+    draw.text((50, 300), topic, fill=(255, 255, 255), font=font)
+
+    filename = f"static/video/{topic}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+    thumbnail.save(filename)
+    return filename
 
