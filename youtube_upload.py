@@ -1,47 +1,49 @@
 import os
-import pickle
 import google.auth
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.http import MediaFileUpload
 
-def upload_video_to_youtube(video_file, title, description):
-    try:
-        creds = Credentials(
-            token=None,
-            refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=os.getenv("GOOGLE_CLIENT_ID"),
-            client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
-        )
-        if not creds.valid and creds.refresh_token:
+# OAuth 인증 설정
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+
+def authenticate_youtube():
+    creds = None
+    if os.path.exists("token.json"):
+        creds, project = google.auth.load_credentials_from_file("token.json")
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "client_secrets.json", SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+    return build("youtube", "v3", credentials=creds)
 
-        youtube = build("youtube", "v3", credentials=creds)
+def upload_video(file_path, title, description):
+    youtube = authenticate_youtube()
 
-        request_body = {
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": ["트렌드", "뉴스", "AI", "자동화"],
-                "categoryId": "22"  # People & Blogs
-            },
-            "status": {
-                "privacyStatus": "public"
-            }
+    request_body = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "tags": ["auto-upload", "YouTube", "trending"]
+        },
+        "status": {
+            "privacyStatus": "public"
         }
+    }
 
-        media_body = MediaFileUpload(video_file, chunksize=-1, resumable=True, mimetype='video/*')
+    media = MediaFileUpload(file_path, mimetype="video/mp4", resumable=True)
 
-        upload_request = youtube.videos().insert(
-            part="snippet,status",
-            body=request_body,
-            media_body=media_body
-        )
-        response = upload_request.execute()
-        print("✅ YouTube 업로드 완료:", response["id"])
+    video_request = youtube.videos().insert(
+        part="snippet,status",
+        body=request_body,
+        media_body=media
+    )
 
-    except HttpError as e:
-        print(f"❌ YouTube 업로드 오류: {e}")
+    response = video_request.execute()
+    print(f"업로드 완료! Video ID: {response['id']}")
 
