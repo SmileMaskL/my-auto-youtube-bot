@@ -1,60 +1,53 @@
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from google.oauth2.credentials import Credentials
 import os
-import time
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
+from google.auth.exceptions import RefreshError
 
-def upload_video(video_path, title, description, tags):
-    # 필수 환경 변수 검증
-    required_env_vars = [
-        'GOOGLE_CLIENT_ID',
-        'GOOGLE_CLIENT_SECRET',
-        'GOOGLE_REFRESH_TOKEN'
-    ]
-    missing = [var for var in required_env_vars if not os.getenv(var)]
-    if missing:
-        raise ValueError(f"⚠️ 필수 환경 변수 누락: {', '.join(missing)}")
+def upload_video_to_youtube(file_path, title, description):
+    try:
+        # 구글 인증 정보
+        credentials = Credentials(
+            token=None,
+            refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+            client_id=os.getenv("GOOGLE_CLIENT_ID"),
+            client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+            token_uri="https://oauth2.googleapis.com/token",
+        )
 
-    # 3회 재시도 로직
-    for attempt in range(3):
-        try:
-            # Google 인증 정보 생성
-            creds = Credentials(
-                token=None,
-                refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=os.getenv("GOOGLE_CLIENT_ID"),
-                client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
-            )
-            
-            # YouTube API 초기화
-            youtube = build("youtube", "v3", credentials=creds)
-            
-            # 메타데이터 설정 (YouTube 정책 준수)
-            request_body = {
-                "snippet": {
-                    "categoryId": "22",
-                    "title": title[:95] + "..." if len(title) > 100 else title,
-                    "description": description[:4500],
-                    "tags": tags[:30]
-                },
-                "status": {"privacyStatus": "public"}
+        # 유튜브 API 객체 생성
+        youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
+
+        # 업로드할 비디오 정보
+        request_body = {
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": ["트렌드", "뉴스", "자동 생성"],
+                "categoryId": "25",  # News & Politics
+            },
+            "status": {
+                "privacyStatus": "public",  # 공개 설정
             }
-            
-            # 영상 업로드
-            media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
-            response = youtube.videos().insert(
-                part="snippet,status",
-                body=request_body,
-                media_body=media
-            ).execute()
-            
-            print(f"✅ 업로드 성공! 영상 URL: https://youtu.be/{response['id']}")
-            return
-        except HttpError as e:
-            print(f"⚠️ YouTube API 오류 ({attempt+1}/3): {str(e)[:100]}")
-            time.sleep(10)
-        except Exception as e:
-            print(f"⚠️ 업로드 실패 ({attempt+1}/3): {str(e)[:100]}")
-            time.sleep(10)
-    print("🚨 모든 업로드 시도 실패")
+        }
+
+        # 파일 경로 절대경로로 변환
+        full_path = os.path.abspath(file_path)
+        if not os.path.isfile(full_path):
+            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {full_path}")
+
+        # 업로드 실행
+        media = MediaFileUpload(full_path, mimetype="video/mp4", resumable=True)
+        response = youtube.videos().insert(
+            part="snippet,status",
+            body=request_body,
+            media_body=media
+        ).execute()
+
+        print(f"✅ 유튜브 업로드 완료: https://youtu.be/{response['id']}")
+
+    except RefreshError as e:
+        print(f"❌ 인증 실패: {e}")
+    except Exception as e:
+        print(f"❌ 업로드 중 오류 발생: {e}")
+
