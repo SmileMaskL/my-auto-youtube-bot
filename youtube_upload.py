@@ -1,49 +1,41 @@
 import os
-import google.auth
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.http import MediaFileUpload
+from dotenv import load_dotenv
 
-# OAuth 인증 설정
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+load_dotenv()
 
-def authenticate_youtube():
-    creds = None
-    if os.path.exists("token.json"):
-        creds, project = google.auth.load_credentials_from_file("token.json")
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "client_secrets.json", SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
-    return build("youtube", "v3", credentials=creds)
+CLIENT_SECRET_JSON = os.getenv("GOOGLE_CLIENT_SECRET_JSON")
+REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
+CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+
 
 def upload_video(file_path, title, description):
-    youtube = authenticate_youtube()
+    creds = Credentials(
+        None,
+        refresh_token=REFRESH_TOKEN,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET
+    )
 
-    request_body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": ["auto-upload", "YouTube", "trending"]
+    youtube = build("youtube", "v3", credentials=creds)
+
+    body = {
+        'snippet': {
+            'title': title,
+            'description': description,
+            'tags': ["트렌드", "자동 콘텐츠"],
+            'categoryId': '22'
         },
-        "status": {
-            "privacyStatus": "public"
+        'status': {
+            'privacyStatus': 'public'
         }
     }
 
-    media = MediaFileUpload(file_path, mimetype="video/mp4", resumable=True)
-
-    video_request = youtube.videos().insert(
-        part="snippet,status",
-        body=request_body,
-        media_body=media
-    )
-
-    response = video_request.execute()
-    print(f"업로드 완료! Video ID: {response['id']}")
-
+    media = MediaFileUpload(file_path, mimetype='video/mp4', resumable=True)
+    request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
+    response = request.execute()
+    print("Video ID:", response.get("id"))

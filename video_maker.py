@@ -1,40 +1,21 @@
-# video_maker.py
-
+from moviepy.editor import *
 import os
-import subprocess
-from datetime import datetime
 
-def make_video(topic, audio_path):
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    video_filename = f"{topic}_{timestamp}.mp4"
-    video_path = os.path.join("static", "video", video_filename)
-    image_path = "default.jpg"
+def make_video(title, audio_path):
+    # 영상 정보
+    output_path = f"static/video/{title}.mp4"
+    background = ColorClip(size=(1280, 720), color=(0, 0, 0), duration=10)
 
-    # 배경 이미지가 없으면 생성
-    if not os.path.exists(image_path):
-        subprocess.run([
-            "convert",  # ImageMagick 필요
-            "-size", "1280x720",
-            "xc:gray",
-            "-gravity", "center",
-            "-pointsize", "48",
-            "-annotate", "0", topic,
-            image_path
-        ], check=True)
+    # 텍스트 오버레이
+    txt_clip = TextClip(title, fontsize=70, color='white', size=(1280, 720), method='caption')
+    txt_clip = txt_clip.set_duration(10).set_position('center')
 
-    # ffmpeg를 사용하여 영상 생성
-    command = [
-        "ffmpeg", "-loop", "1",
-        "-i", image_path,
-        "-i", audio_path,
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-shortest",
-        "-y", video_path
-    ]
+    # 오디오
+    audio = AudioFileClip(audio_path)
 
-    subprocess.run(command, check=True)
-    return video_path
+    # 영상 합성
+    final_video = CompositeVideoClip([background, txt_clip]).set_audio(audio)
+    final_video.duration = audio.duration
+    final_video.write_videofile(output_path, fps=24, codec='libx264')
+    return output_path
 
