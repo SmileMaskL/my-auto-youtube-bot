@@ -1,9 +1,9 @@
 name: YouTube Auto Upload
 
 on:
-  workflow_dispatch:  # 수동 실행을 위한 트리거
+  workflow_dispatch:  # 수동 실행
   schedule:
-    - cron: '0 4 * * *'  # 한국 시간 오후 1시 (UTC 4시)
+    - cron: '0 4 * * *'  # 매일 오후 1시 (KST)
 
 jobs:
   run-script:
@@ -31,6 +31,7 @@ jobs:
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> $GITHUB_ENV
           echo "GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}" >> $GITHUB_ENV
           echo "OPENAI_API_KEY_1=${{ secrets.OPENAI_API_KEY_1 }}" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY_2=${{ secrets.OPENAI_API_KEY_2 }}" >> $GITHUB_ENV
 
       - name: Run secure_main.py
         run: python secure_main.py
