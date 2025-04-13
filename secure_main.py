@@ -7,10 +7,9 @@ from googleapiclient.discovery import build
 from secure_generate_script import generate_script
 from secure_text_to_audio import text_to_audio
 from secure_generate_video import generate_video
-
-# 환경 변수 로드
 from dotenv import load_dotenv
 
+# 환경 변수 로드
 load_dotenv()
 
 # 로그 설정

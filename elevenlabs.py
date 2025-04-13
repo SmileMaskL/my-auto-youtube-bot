@@ -1,8 +1,5 @@
-# elevenlabs.py
-
 import requests
 import os
-from datetime import datetime
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_KEY")
 VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
