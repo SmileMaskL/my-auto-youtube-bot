@@ -1,7 +1,6 @@
 import os
 import json
 from datetime import datetime
-from gtts import gTTS
 import openai
 import requests
 from elevenlabs import set_api_key
@@ -11,16 +10,7 @@ from youtube_upload import upload_video_to_youtube
 # ElevenLabs API 키 설정
 set_api_key(os.getenv("ELEVENLABS_KEY"))
 
-# OpenAI API 키 설정
-openai.api_key = os.getenv("OPENAI_API_KEY_1")
-openai.api_key = os.getenv("OPENAI_API_KEY_2")
-openai.api_key = os.getenv("OPENAI_API_KEY_3")
-openai.api_key = os.getenv("OPENAI_API_KEY_4")
-openai.api_key = os.getenv("OPENAI_API_KEY_5")
-openai.api_key = os.getenv("OPENAI_API_KEY_6")
-openai.api_key = os.getenv("OPENAI_API_KEY_7")
-openai.api_key = os.getenv("OPENAI_API_KEY_8")
-openai.api_key = os.getenv("OPENAI_API_KEY_9")
+# OpenAI API 키 설정 (마지막 키만 적용됨 – 추후 로테이션 구조로 변경 추천)
 openai.api_key = os.getenv("OPENAI_API_KEY_10")
 
 # 트렌드 가져오기
@@ -61,7 +51,7 @@ def save_audio(audio, filename="output.mp3"):
     with open(filename, "wb") as f:
         f.write(audio)
 
-# 영상 생성 (간단하게 정적 이미지 사용)
+# 영상 생성 (정적 이미지와 오디오로)
 def create_video(image_path, audio_path, output_path):
     os.system(f"ffmpeg -y -loop 1 -i {image_path} -i {audio_path} -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest {output_path}")
 
@@ -86,7 +76,7 @@ def main():
     if not os.path.exists("static"):
         os.makedirs("static")
 
-    image_path = "static/background.jpg"  # 기본 배경 이미지 경로
+    image_path = "static/background.jpg"  # 업로드한 이미지 사용
     video_path = f"static/{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
 
     create_video(image_path, "output.mp3", video_path)
