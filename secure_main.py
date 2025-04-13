@@ -1,4 +1,3 @@
-# secure_main.py
 import os
 from dotenv import load_dotenv
 from trending import get_trending_topic
