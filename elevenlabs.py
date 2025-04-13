@@ -11,29 +11,26 @@ def text_to_speech(text, filename, model="eleven_multilingual_v2"):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 
     headers = {
-        "Accept": "audio/mpeg",
-        "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_API_KEY
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
     }
 
     data = {
         "text": text,
-        "model_id": model,
         "voice_settings": {
-            "stability": 0.75,
+            "stability": 0.5,
             "similarity_boost": 0.75
-        }
+        },
+        "model_id": model
     }
 
-    response = requests.post(url, json=data, headers=headers)
-
+    response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
-        save_path = f"static/audio/{filename}"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as f:
+        with open(filename, "wb") as f:
             f.write(response.content)
-        print(f"[오디오 저장 완료] {save_path}")
-        return save_path
+        print(f"[오디오 생성 완료] {filename}")
+        return filename
     else:
-        raise Exception(f"[ElevenLabs 오류] {response.status_code}: {response.text}")
+        print(f"[오류] ElevenLabs 요청 실패: {response.status_code} - {response.text}")
+        raise Exception("ElevenLabs TTS 실패")
 

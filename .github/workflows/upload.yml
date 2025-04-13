@@ -1,46 +1,31 @@
-name: Daily YouTube Upload
+name: YouTube Automation
 
 on:
-  schedule:
-    - cron: "0 0 * * *"  # 매일 00:00 UTC (한국 시간 9:00AM)
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # 최대 실행 시간 (2시간)
     steps:
-      - name: 저장소 체크아웃
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Python 설치
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v2
         with:
-          python-version: "3.10"
+          python-version: '3.9'
 
-      - name: ffmpeg 설치
-        run: sudo apt update && sudo apt install -y ffmpeg
-
-      - name: 필요한 패키지 설치
-        run: pip install -r requirements.txt
-
-      - name: .env 생성
+      - name: Install dependencies
         run: |
-          echo "생성된 .env 파일" > .env
-          echo "OPENAI_API_KEY_1=${{ secrets.OPENAI_API_KEY_1 }}" >> .env
-          echo "OPENAI_API_KEY_2=${{ secrets.OPENAI_API_KEY_2 }}" >> .env
-          echo "OPENAI_API_KEY_3=${{ secrets.OPENAI_API_KEY_3 }}" >> .env
-          echo "OPENAI_API_KEY_4=${{ secrets.OPENAI_API_KEY_4 }}" >> .env
-          echo "OPENAI_API_KEY_5=${{ secrets.OPENAI_API_KEY_5 }}" >> .env
-          echo "OPENAI_API_KEY_6=${{ secrets.OPENAI_API_KEY_6 }}" >> .env
-          echo "OPENAI_API_KEY_7=${{ secrets.OPENAI_API_KEY_7 }}" >> .env
-          echo "OPENAI_API_KEY_8=${{ secrets.OPENAI_API_KEY_8 }}" >> .env
-          echo "OPENAI_API_KEY_9=${{ secrets.OPENAI_API_KEY_9 }}" >> .env
-          echo "OPENAI_API_KEY_10=${{ secrets.OPENAI_API_KEY_10 }}" >> .env
-          echo "ELEVENLABS_KEY=${{ secrets.ELEVENLABS_KEY }}" >> .env
-          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
-          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
-          echo "GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}" >> .env
-
-      - name: 자동 콘텐츠 생성 및 업로드
+          pip install -r requirements.txt
+          
+      - name: Create .env file with secrets
+        run: |
+          echo "GOOGLE_CLIENT_SECRET_JSON=${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}" >> .env
+          echo "ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" >> .env
+          
+      - name: Run the script
         run: python secure_main.py
+
