@@ -1,7 +1,11 @@
+import os
 import time
 from elevenlabs import text_to_speech, save
 from openai_rotate import get_openai_api_key
 from dotenv import load_dotenv
+from trending import get_trending_topic
+from video_maker import make_video
+from youtube_upload import upload_video
 
 # .env 파일 로드
 load_dotenv()
