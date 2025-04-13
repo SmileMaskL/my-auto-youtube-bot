@@ -27,16 +27,8 @@ print(f"[1] 트렌드 주제 추출 완료: {topic}")
 # 콘텐츠 생성
 content = f"{topic}에 대해 오늘 알아보겠습니다. 많은 관심을 받고 있는 주제입니다."
 
-# 음성 생성
-audio = text_to_speech(
-    text=content,
-    voice=VOICE_ID,
-    model="eleven_multilingual_v2"
-)
-
-# 오디오 저장
-audio_path = "static/audio/output.mp3"
-save(audio, audio_path)
+# 음성 생성 (generate 대신 text_to_speech로 수정)
+audio_path = text_to_speech(content, topic)
 print(f"[2] 오디오 저장 완료: {audio_path}")
 
 # 영상 생성

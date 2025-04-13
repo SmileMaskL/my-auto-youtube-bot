@@ -11,7 +11,6 @@ REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
-
 def upload_video(file_path, title, description):
     creds = Credentials(
         None,
@@ -39,3 +38,4 @@ def upload_video(file_path, title, description):
     request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
     response = request.execute()
     print("Video ID:", response.get("id"))
+
