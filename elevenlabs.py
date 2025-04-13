@@ -1,6 +1,7 @@
 # elevenlabs.py
 import requests
 import os
+from datetime import datetime
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_KEY")
 
@@ -25,13 +26,11 @@ def text_to_speech(text, voice, model="eleven_multilingual_v2"):
     response = requests.post(url, json=data, headers=headers)
 
     if response.status_code == 200:
-        return response.content
+        file_path = f"static/audio/voice_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+        return file_path
     else:
-        print(f"[음성 생성 실패] 상태코드: {response.status_code}")
-        print(response.text)
-        raise Exception("음성 생성 실패")
-
-def save(audio_data, output_path):
-    with open(output_path, "wb") as f:
-        f.write(audio_data)
+        raise Exception(f"ElevenLabs API 오류: {response.status_code} - {response.text}")
 

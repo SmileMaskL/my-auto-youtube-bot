@@ -3,6 +3,7 @@
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2Credentials
+from datetime import datetime
 import os
 import json
 
@@ -46,7 +47,15 @@ def upload_video(video_path, title, description, thumbnail_path):
         log_file.write(f"{datetime.now()}: {video_id} 업로드 완료\n")
 
 def post_comment(youtube, video_id, text):
-   
-::contentReference[oaicite:0]{index=0}
- 
+    comment_body = {
+        "snippet": {
+            "videoId": video_id,
+            "topLevelComment": {
+                "snippet": {
+                    "textOriginal": text
+                }
+            }
+        }
+    }
+    youtube.commentThreads().insert(part="snippet", body=comment_body).execute()
 

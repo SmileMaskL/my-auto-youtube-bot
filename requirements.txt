@@ -5,3 +5,6 @@ oauth2client
 openai
 pytrends
 elevenlabs
+requests
+ffmpeg-python
+
