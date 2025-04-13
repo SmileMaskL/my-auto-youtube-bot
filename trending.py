@@ -1,3 +1,6 @@
+# trending.py
+from pytrends.request import TrendReq  # ← 이 줄 추가 필요
+
 def get_trending_topic():
     pytrends = TrendReq(hl='ko', tz=540)
     
