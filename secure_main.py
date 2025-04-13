@@ -1,3 +1,5 @@
+# secure_main.py
+
 import os
 import random
 import time
@@ -7,7 +9,6 @@ from video_maker import make_video
 from youtube_upload import upload_video
 from elevenlabs import text_to_speech, save
 import openai
-import requests
 
 # 환경변수 불러오기
 load_dotenv()
