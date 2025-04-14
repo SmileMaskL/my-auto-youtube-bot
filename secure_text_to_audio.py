@@ -2,28 +2,25 @@ import os
 import requests
 import logging
 from datetime import datetime
-from elevenlabs import ElevenLabs, SaveMode
+from dotenv import load_dotenv
 
+# 환경 변수 로드
+load_dotenv()
+
+# 로그 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# ElevenLabs 클라이언트 초기화
-try:
-    # API 키는 환경 변수 ELEVEN_API_KEY 또는 ELEVENLABS_API_KEY 에서 자동 로드 시도
-    client = ElevenLabs()
-    # 간단한 API 호출로 키 유효성 및 연결 확인
-    client.models.get_all()
-    logging.info("ElevenLabs client initialized successfully.")
-except Exception as e:
-    logging.error(f"Failed to initialize ElevenLabs client. Check API key (ELEVEN_API_KEY/ELEVENLABS_API_KEY). Error: {e}")
-    client = None
-
-# ElevenLabs 무료 티어의 대략적인 월간 한도 (정확한 값은 공식 문서 확인 필요)
+# ElevenLabs 무료 티어의 대략적인 월간 한도 (참고용)
 ELEVENLABS_FREE_TIER_CHARS = 10000
 
-def text_to_audio(text, voice_id, output_folder="generated_audio"):
-    """텍스트를 오디오로 변환 (비용 및 무료 한도 경고 포함)"""
-    if not client:
-        raise ConnectionError("ElevenLabs client is not initialized. Check API key and initialization.")
+# *** 함수명을 text_to_speech 로 변경 ***
+def text_to_speech(text, voice_id, output_folder="generated_audio", stability=0.7, similarity_boost=0.8):
+    """텍스트를 오디오로 변환하고 파일로 저장 (requests 사용, elevenlabs==0.2.x 호환)"""
+
+    api_key = os.getenv("ELEVENLABS_API_KEY")
+    if not api_key:
+        logging.error("ElevenLabs API key not found in environment variables (ELEVENLABS_API_KEY).")
+        raise ValueError("Missing ElevenLabs API Key")
 
     if not text:
         logging.error("Input text for audio generation is empty.")
@@ -35,18 +32,33 @@ def text_to_audio(text, voice_id, output_folder="generated_audio"):
     text_length = len(text)
     logging.info(f"Requesting audio generation for {text_length} characters.")
     logging.warning("ElevenLabs API calls consume character quota and may incur costs if free tier limit is exceeded.")
-    # 현재 실행에서 사용량 추적은 어려우므로, 대략적인 경고만 제공
-    if text_length > ELEVENLABS_FREE_TIER_CHARS * 0.1: # 한 번에 무료 한도의 10% 이상 사용 시 경고
-         logging.warning(f"Requested text length ({text_length}) is significant compared to the estimated monthly free tier limit ({ELEVENLABS_FREE_TIER_CHARS}). Monitor your usage.")
+    if text_length > ELEVENLABS_FREE_TIER_CHARS * 0.1:
+         logging.warning(f"Requested text length ({text_length}) is significant compared to the estimated monthly free tier ({ELEVENLABS_FREE_TIER_CHARS}). Monitor your usage.")
+
+    # ElevenLabs API 엔드포인트 (v1)
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+
+    data = {
+        "text": text,
+        "model_id": "eleven_multilingual_v2", # 또는 다른 모델 ID
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity_boost,
+            # "style": 0.2, # 필요시 추가
+            # "use_speaker_boost": True # 필요시 추가
+        }
+    }
 
     try:
-        # 오디오 생성 요청
-        # stream=True 대신 save 사용 (elevenlabs v1.0.0 이상)
-        audio_data = client.generate(
-            text=text,
-            voice=voice_id,
-            model="eleven_multilingual_v2" # 또는 eleven_mono_v1 등
-        )
+        logging.info(f"Sending request to ElevenLabs API for voice ID: {voice_id}")
+        response = requests.post(url, json=data, headers=headers, timeout=180) # 타임아웃 3분 설정
+        response.raise_for_status() # 오류 발생 시 예외 발생 (4xx, 5xx)
 
         # 출력 폴더 생성
         if not os.path.exists(output_folder):
@@ -59,49 +71,43 @@ def text_to_audio(text, voice_id, output_folder="generated_audio"):
         audio_filename = f"audio_{safe_voice_id}_{timestamp}.mp3"
         audio_path = os.path.join(output_folder, audio_filename)
 
-        # 파일 저장 (elevenlabs v1.0.0)
+        # 오디오 파일 저장
         with open(audio_path, "wb") as f:
-            f.write(audio_data)
-
-        # SaveMode.SAVE 사용 시 (다른 방식)
-        # client.save(audio=audio_data, filename=audio_path, save_mode=SaveMode.OVERWRITE)
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
 
         logging.info(f"Audio file successfully saved to: {audio_path}")
         return audio_path
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"Network error during ElevenLabs API request: {e}")
-        raise ConnectionError(f"Network error communicating with ElevenLabs: {e}")
+        logging.error(f"Network or request error during ElevenLabs API call: {e}")
+        # 응답 내용 로깅 시도
+        if e.response is not None:
+            logging.error(f"Response status code: {e.response.status_code}")
+            logging.error(f"Response text: {e.response.text}")
+        # 할당량 초과 또는 인증 오류 확인
+        if e.response is not None and e.response.status_code in [401, 402]:
+             logging.error("Authentication error or quota exceeded likely for ElevenLabs.")
+             # 재시도 의미 없음
+             raise ConnectionAbortedError("ElevenLabs authentication/quota error.") from e
+        raise ConnectionError(f"Failed to get audio from ElevenLabs: {e}") from e
     except Exception as e:
-        # API 에러 (예: 할당량 초과, 잘못된 키 등)
-        logging.error(f"Failed to generate audio using ElevenLabs: {str(e)}")
-        # 에러 응답 내용 로깅 시도 (API 구조에 따라 다를 수 있음)
-        if hasattr(e, 'response') and e.response is not None:
-             logging.error(f"API Response Status: {e.response.status_code}")
-             try:
-                 logging.error(f"API Response Body: {e.response.json()}")
-             except:
-                 logging.error(f"API Response Body: {e.response.text}")
-        # 할당량 초과 관련 에러 메시지 확인 및 로깅 (예시)
-        if "quota" in str(e).lower() or "limit" in str(e).lower():
-             logging.error("Potential quota exceeded error detected.")
+        logging.error(f"Unexpected error during audio generation: {str(e)}")
         raise
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-    load_dotenv()
     logging.basicConfig(level=logging.INFO)
 
-    test_text = "비용 효율적인 자동화를 위한 짧은 음성 테스트입니다. 무료 한도를 잘 관리해야 합니다."
+    test_text = "이것은 elevenlabs 0.2.12 버전 호환성 테스트입니다. requests 라이브러리를 사용합니다."
     test_voice_id = os.getenv("ELEVENLABS_VOICE_ID")
 
     if not test_voice_id:
         print("오류: .env 파일에 ELEVENLABS_VOICE_ID를 설정해주세요.")
-    elif not client:
-         print("오류: ElevenLabs 클라이언트 초기화 실패. API 키를 확인하세요.")
     else:
         try:
-            output_path = text_to_audio(test_text, test_voice_id)
+            # 함수명 변경됨: text_to_speech
+            output_path = text_to_speech(test_text, test_voice_id)
             print(f"테스트 오디오 생성 완료: {output_path}")
         except Exception as e:
             print(f"테스트 오디오 생성 중 오류 발생: {e}")
