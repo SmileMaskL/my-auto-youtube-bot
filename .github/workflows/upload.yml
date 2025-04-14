@@ -1,10 +1,9 @@
-name: YouTube Automation Pipeline
+name: YouTube Automation Pipeline (Cost Optimized)
 
 on:
   schedule:
-    # 매일 2회 실행 (예: 오전 9시, 오후 9시 KST = UTC 0시, 12시)
-    # 시간을 조정하여 API 할당량 고려 (예: 하루 1~2회)
-    - cron: '0 0,12 * * *'
+    # *** 비용 최소화를 위해 하루 1회 실행 (예: UTC 0시 = KST 오전 9시) ***
+    - cron: '0 0 * * *'
   workflow_dispatch: # 수동 실행 가능
 
 jobs:
@@ -12,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4 # 최신 버전 사용
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # 최신 버전 사용
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # requirements.txt와 호환되는 버전 명시
+          python-version: '3.10'
 
       - name: Install system dependencies (ffmpeg, fonts)
         run: |
@@ -25,40 +24,38 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-dejavu
 
       - name: Install Python dependencies
+        # 캐싱 추가하여 빌드 시간 단축 (비용 절감에 약간 도움)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run YouTube Automation Script
-        # GitHub Secrets를 환경 변수로 직접 주입
         env:
-          # GOOGLE_CLIENT_SECRET_JSON: 전체 JSON 내용을 Secret에 저장
+          # GitHub Secrets 설정은 이전 답변과 동일하게 필요
           GOOGLE_CLIENT_SECRET_JSON: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}
-          # GOOGLE_TOKEN_JSON: 로컬에서 인증 후 생성된 token.json 내용을 Secret에 저장 (선택적, 자동 갱신 시 필요)
-          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }} # 이 Secret이 없으면 최초 실행 시 인증 필요 (Actions에서는 불가)
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-          # OpenAI API 키 (여러 개 로테이션)
           OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
-          OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
-          # ... 필요한 만큼 추가 ...
+          # ... 필요한 OpenAI 키 Secret 추가 ...
           OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
-          # TREND_KEYWORDS: ${{ secrets.TREND_KEYWORDS }} # 트렌드 키워드 Secret 사용 시
+          # TREND_KEYWORDS: ${{ secrets.TREND_KEYWORDS }} # 필요 시
 
-        run: python secure_main.py # 메인 스크립트 실행
+        run: python secure_main.py
 
-      - name: Upload logs and artifacts (optional)
-        # 실패 시 로그 확인을 위해 업로드, 성공 시에는 불필요할 수 있음
-        if: failure() # 실패했을 때만 아티팩트 업로드
-        uses: actions/upload-artifact@v4 # 최신 버전 사용
+      - name: Upload logs on failure (optional)
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          name: failure-logs-and-outputs
+          name: failure-logs
           path: |
             .secure_log.txt
-            *.log # 다른 로그 파일들
-            generated_audio/ # 생성된 오디오 (디버깅용)
-            generated_videos/ # 생성된 비디오 (디버깅용)
-            generated_thumbnails/ # 생성된 썸네일 (디버깅용)
-            token.json # 생성된 토큰 (디버깅용)
-          retention-days: 5 # 5일간 보관
+            *.log
+          retention-days: 5
