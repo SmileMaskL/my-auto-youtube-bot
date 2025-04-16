@@ -1,59 +1,103 @@
 import os
 import logging
+import time
+from typing import Optional
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from moviepy.editor import VideoFileClip
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 from quota_manager import quota_manager
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('static/logs/youtube_upload.log'),
+        logging.StreamHandler()
+    ]
+)
 
 class YouTubeUploader:
-    def __init__(self, credentials):
-        self.service = build('youtube', 'v3', credentials=credentials)
+    SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+    API_SERVICE_NAME = 'youtube'
+    API_VERSION = 'v3'
+    
+    def __init__(self):
+        self.credentials = self._get_credentials()
+        self.youtube = self._get_youtube_service()
         self.max_retries = 3
+        self.retry_delay = 5
 
-    def _convert_to_shorts(self, video_path):
-        try:
-            clip = VideoFileClip(video_path)
-            if clip.duration > 60:
-                new_path = video_path.replace('.mp4', '_shorts.mp4')
-                clip = clip.subclip(0, min(60, clip.duration))
-                clip.write_videofile(new_path, codec='libx264', audio_codec='aac')
-                logging.info(f"Converted to shorts: {new_path}")
-                return new_path
-            return video_path
-        except Exception as e:
-            logging.error(f"Shorts conversion failed: {str(e)}")
-            return video_path
+    def _get_credentials(self):
+        """Google API 자격증명 가져오기"""
+        creds = None
+        creds_json = os.getenv('GOOGLE_CREDS')
+        
+        if creds_json:
+            try:
+                creds = Credentials.from_authorized_user_info(info=json.loads(creds_json))
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                return creds
+            except Exception as e:
+                logging.error(f"환경 변수 자격증명 로드 실패: {e}")
 
-    def upload_video(self, file_path, title, description, thumbnail_path=None, is_shorts=True):
+        # 환경 변수 실패 시 파일 시도
+        secrets_file = 'client_secrets.json'
+        if os.path.exists(secrets_file):
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(secrets_file, self.SCOPES)
+                creds = flow.run_local_server(port=0)
+                return creds
+            except Exception as e:
+                logging.error(f"파일 자격증명 로드 실패: {e}")
+
+        logging.error("Google API 자격증명을 가져올 수 없습니다.")
+        return None
+
+    def _get_youtube_service(self):
+        """YouTube 서비스 빌드"""
+        if not self.credentials:
+            raise ValueError("유효한 자격증명이 없습니다.")
+        return build(self.API_SERVICE_NAME, self.API_VERSION, credentials=self.credentials)
+
+    def upload_video(self, video_path: str, title: str, description: str, 
+                   thumbnail_path: Optional[str] = None) -> Optional[str]:
+        """동영상 업로드"""
+        if not os.path.exists(video_path):
+            logging.error(f"비디오 파일을 찾을 수 없습니다: {video_path}")
+            return None
+
         for attempt in range(self.max_retries):
             if not quota_manager.check_quota('youtube'):
-                logging.error("YouTube API daily quota exhausted")
+                logging.error("YouTube API 일일 쿼터 초과")
                 return None
 
             try:
-                # 쇼츠 변환
-                final_path = self._convert_to_shorts(file_path) if is_shorts else file_path
-
                 body = {
                     'snippet': {
                         'title': title,
                         'description': description,
-                        'categoryId': '22'
+                        'tags': ['AI', '자동생성', '쇼츠'],
+                        'categoryId': '28'  # 과학기술
                     },
                     'status': {
                         'privacyStatus': 'public',
-                        'selfDeclaredMadeForKids': False
+                        'selfDeclaredMadeForKids': False,
+                        'embeddable': True
                     }
                 }
 
-                if is_shorts:
-                    body['contentDetails'] = {'duration': 'PT60S'}
+                media = MediaFileUpload(
+                    video_path,
+                    mimetype='video/mp4',
+                    chunksize=1024*1024,
+                    resumable=True
+                )
 
-                media = MediaFileUpload(final_path, chunksize=-1, resumable=True)
-                request = self.service.videos().insert(
-                    part='snippet,status,contentDetails',
+                request = self.youtube.videos().insert(
+                    part='snippet,status',
                     body=body,
                     media_body=media
                 )
@@ -62,50 +106,80 @@ class YouTubeUploader:
                 while response is None:
                     status, response = request.next_chunk()
                     if status:
-                        logging.info(f"Upload progress: {int(status.progress() * 100)}%")
+                        logging.info(f"업로드 진행률: {int(status.progress() * 100)}%")
 
-                quota_manager.update_usage('youtube', 1600)  # 비디오 업로드: 1600 quota units
-                logging.info(f"Successfully uploaded video ID: {response['id']}")
+                video_id = response['id']
+                quota_manager.update_usage('youtube', 1600)  # 비디오 업로드 쿼터
 
                 # 썸네일 업로드
                 if thumbnail_path and os.path.exists(thumbnail_path):
-                    self.upload_thumbnail(response['id'], thumbnail_path)
+                    self._upload_thumbnail(video_id, thumbnail_path)
 
-                return response['id']
+                # 댓글 추가
+                self._add_comment(video_id, "이 영상은 AI로 자동 생성되었습니다. 👍 구독과 좋아요 부탁드립니다!")
+
+                logging.info(f"동영상 업로드 성공! ID: {video_id}")
+                return video_id
 
             except Exception as e:
-                logging.error(f"Upload attempt {attempt+1} failed: {str(e)}")
+                logging.error(f"시도 {attempt + 1} 실패: {str(e)}")
                 if attempt == self.max_retries - 1:
-                    return None
-                time.sleep(5 ** attempt)  # Exponential backoff
+                    raise
+                time.sleep(self.retry_delay * (attempt + 1))
 
-    def upload_thumbnail(self, video_id, thumbnail_path):
+        return None
+
+    def _upload_thumbnail(self, video_id: str, thumbnail_path: str):
+        """썸네일 업로드"""
         try:
-            media = MediaFileUpload(thumbnail_path)
-            self.service.thumbnails().set(
+            media = MediaFileUpload(thumbnail_path, mimetype='image/jpeg')
+            self.youtube.thumbnails().set(
                 videoId=video_id,
                 media_body=media
             ).execute()
-            logging.info(f"Thumbnail uploaded for video {video_id}")
+            logging.info(f"썸네일 업로드 성공: {video_id}")
         except Exception as e:
-            logging.error(f"Thumbnail upload failed: {str(e)}")
+            logging.error(f"썸네일 업로드 실패: {str(e)}")
 
-    def post_comment(self, video_id, comment_text):
+    def _add_comment(self, video_id: str, text: str):
+        """동영상에 댓글 추가"""
         try:
-            self.service.commentThreads().insert(
+            self.youtube.commentThreads().insert(
                 part='snippet',
                 body={
                     'snippet': {
                         'videoId': video_id,
                         'topLevelComment': {
                             'snippet': {
-                                'textOriginal': comment_text
+                                'textOriginal': text
                             }
                         }
                     }
                 }
             ).execute()
-            logging.info(f"Comment posted on video {video_id}")
+            logging.info(f"댓글 추가 성공: {video_id}")
         except Exception as e:
-            logging.error(f"Failed to post comment: {str(e)}")
+            logging.error(f"댓글 추가 실패: {str(e)}")
 
+# YouTube 업로더 인스턴스
+youtube_uploader = YouTubeUploader()
+
+if __name__ == "__main__":
+    test_video = "static/videos/test_video.mp4"
+    test_thumbnail = "static/thumbnails/test_thumbnail.jpg"
+    
+    if os.path.exists(test_video):
+        try:
+            video_id = youtube_uploader.upload_video(
+                video_path=test_video,
+                title="테스트 동영상",
+                description="이 동영상은 YouTube 업로더 테스트용입니다.",
+                thumbnail_path=test_thumbnail if os.path.exists(test_thumbnail) else None
+            )
+            if video_id:
+                print(f"업로드 성공! 동영상 ID: {video_id}")
+                print(f"영상 링크: https://youtu.be/{video_id}")
+        except Exception as e:
+            print(f"업로드 실패: {e}")
+    else:
+        print("테스트 비디오 파일이 없습니다. 먼저 비디오를 생성하세요.")

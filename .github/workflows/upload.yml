@@ -2,36 +2,41 @@ name: YouTube AutoBot Pro Ultra
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # 4시간 간격 실행 (쿼터 최적화)
+    - cron: '0 */6 * * *'  # 6시간 간격 실행 (쿼터 최적화)
   workflow_dispatch:
 
 jobs:
   automation:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
-    - name: 코드 동기화
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: 시스템 설정
-      run: |
-        mkdir -p static/{videos,audio,thumbnails,logs}
-        sudo apt-get install -y ffmpeg libimage-exiftool-perl
-
-    - name: 파이썬 환경
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: 패키지 설치
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg python3-pip
+
+    - name: Install Python dependencies
       run: pip install -r requirements.txt
 
-    - name: 실행 단계
+    - name: Create necessary directories
+      run: |
+        mkdir -p static/{videos,audio,thumbnails,logs}
+
+    - name: Run YouTube AutoBot
       env:
         OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
+        ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
+        YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
       run: |
         python secure_main.py --auto
-
