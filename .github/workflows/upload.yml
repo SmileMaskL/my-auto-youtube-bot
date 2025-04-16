@@ -1,60 +1,48 @@
-name: YouTube AutoBot
+name: YouTube AutoBot 2.0
 
 on:
   schedule:
-    - cron: '0 0,12 * * *'  # 하루 2회 실행 (00:00, 12:00 UTC)
+    - cron: '0 0,6,12,18 * * *'  # 6시간 간격 실행
   workflow_dispatch:
 
 jobs:
-  build:
+  automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.10
+    - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11'
 
-    - name: Install system dependencies
+    - name: Install system deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg imagemagick fonts-dejavu
+        sudo apt-get install -y ffmpeg libsm6 libxext6
 
     - name: Install Python packages
       run: |
-        python -m pip install --upgrade pip
+        pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run Main Script
+    - name: Execute Main Script
       env:
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
-        ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
-        OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
-        OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
-        OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
-        OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 }}
-        OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 }}
-        OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 }}
-        OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 }}
-        OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
-        OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
+        GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
+        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
       run: |
+        mkdir -p static/{videos,thumbnails,audio}
         python secure_main.py --auto
 
-    - name: Upload Artifacts
-      if: always()
-      uses: actions/upload-artifact@v3
+    - name: Upload output
+      uses: actions/upload-artifact@v4
       with:
-        name: output
+        name: youtube-output
         path: |
           static/videos/*.mp4
-          static/thumbnails/*.jpg
+          static/thumbnails/*.png
 

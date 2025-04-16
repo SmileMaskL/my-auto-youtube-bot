@@ -1,43 +1,39 @@
 import os
-import random
 import logging
+from typing import List
 from quota_manager import quota_manager
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-class OpenAIManager:
+class OpenAIKeyManager:
     def __init__(self):
-        self.keys = self._load_keys()
-        self.current_key = None
+        self.keys: List[str] = []
+        self._load_keys()
+        
+    def _load_keys(self) -> None:
+        """환경 변수에서 키 불러오기"""
+        key_str = os.getenv('OPENAI_API_KEYS', '')
+        self.keys = [k.strip() for k in key_str.split(';') if k.strip()]
+        
+        if not self.keys:
+            logging.critical("❌ No OpenAI keys found in environment")
+            raise EnvironmentError("OPENAI_API_KEYS environment variable required")
+            
+        logging.info(f"🔑 Loaded {len(self.keys)} API keys")
 
-    def _load_keys(self):
-        keys = []
-        for i in range(1, 11):
-            key = os.getenv(f'OPENAI_API_KEY_{i}')
-            if key and key.strip():
-                keys.append(key.strip())
-        if not keys:
-            raise ValueError("No valid OpenAI API keys found in environment variables")
-        return keys
+    def get_active_key(self) -> str:
+        """사용 가능한 키 선택"""
+        for key in self.keys:
+            if quota_manager.check_quota('openai', key):
+                logging.info(f"🔄 Using key: {key[-6:]}")
+                return key
+                
+        logging.warning("⚠️ All keys exhausted, resetting...")
+        quota_manager.reset_daily_usage()
+        return self.keys[0]
 
-    def get_active_key(self):
-        valid_keys = [k for k in self.keys if quota_manager.check_quota('openai', k)]
-        if not valid_keys:
-            logging.warning("All OpenAI keys exhausted. Resetting daily usage...")
-            quota_manager.reset_daily_usage()
-            valid_keys = self.keys  # 재시도 위해 모든 키 반환
-
-        # 사용량이 가장 적은 키 선택
-        valid_keys.sort(key=lambda k: quota_manager.quota_data['openai']['keys'].get(k, 0))
-        self.current_key = valid_keys[0]
-        return self.current_key
-
-    def track_usage(self, prompt_tokens, completion_tokens):
-        if self.current_key:
-            total_tokens = prompt_tokens + completion_tokens
-            quota_manager.update_usage('openai', total_tokens, self.current_key)
-            logging.info(f"Updated OpenAI usage for key {self.current_key[-5:]}: +{total_tokens} tokens")
-
-# 전역 인스턴스 생성
-openai_manager = OpenAIManager()
+openai_manager = OpenAIKeyManager()
 
