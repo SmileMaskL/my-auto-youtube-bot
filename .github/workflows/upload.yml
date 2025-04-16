@@ -1,48 +1,43 @@
-name: YouTube AutoBot 2.0
+name: YouTube AutoBot Pro
 
 on:
   schedule:
-    - cron: '0 0,6,12,18 * * *'  # 6시간 간격 실행
+    - cron: '0 */6 * * *'  # 6시간 간격 실행
   workflow_dispatch:
 
 jobs:
-  automation:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  automate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
+    - name: Setup Python 3.11
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: Install system deps
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg libsm6 libxext6
-
-    - name: Install Python packages
-      run: |
+        sudo apt-get install -y ffmpeg libgl1
         pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Execute Main Script
+    - name: Run Automation
       env:
+        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
-        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
       run: |
         mkdir -p static/{videos,thumbnails,audio}
         python secure_main.py --auto
 
-    - name: Upload output
+    - name: Upload Results
       uses: actions/upload-artifact@v4
       with:
-        name: youtube-output
-        path: |
-          static/videos/*.mp4
-          static/thumbnails/*.png
+        name: youtube-results
+        path: static/
 

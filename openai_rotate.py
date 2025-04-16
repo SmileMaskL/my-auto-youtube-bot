@@ -1,39 +1,35 @@
 import os
 import logging
 from typing import List
-from quota_manager import quota_manager
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
 class OpenAIKeyManager:
     def __init__(self):
         self.keys: List[str] = []
+        self.current_index = 0
         self._load_keys()
-        
-    def _load_keys(self) -> None:
-        """환경 변수에서 키 불러오기"""
+
+    def _load_keys(self):
+        """환경 변수에서 키 로드"""
         key_str = os.getenv('OPENAI_API_KEYS', '')
-        self.keys = [k.strip() for k in key_str.split(';') if k.strip()]
-        
-        if not self.keys:
-            logging.critical("❌ No OpenAI keys found in environment")
-            raise EnvironmentError("OPENAI_API_KEYS environment variable required")
+        if not key_str:
+            raise EnvironmentError("OPENAI_API_KEYS 환경 변수 필요")
             
-        logging.info(f"🔑 Loaded {len(self.keys)} API keys")
+        self.keys = [k.strip() for k in key_str.split(';') if k.startswith('sk-')]
+        if len(self.keys) < 10:
+            logging.warning(f"경고: {len(self.keys)}/10 개의 키만 발견됨")
+            
+        logging.info(f"🔑 총 {len(self.keys)} 개의 OpenAI 키 로드됨")
 
-    def get_active_key(self) -> str:
-        """사용 가능한 키 선택"""
-        for key in self.keys:
-            if quota_manager.check_quota('openai', key):
-                logging.info(f"🔄 Using key: {key[-6:]}")
-                return key
-                
-        logging.warning("⚠️ All keys exhausted, resetting...")
-        quota_manager.reset_daily_usage()
-        return self.keys[0]
+    def get_key(self):
+        """로테이션으로 키 제공"""
+        key = self.keys[self.current_index]
+        self.current_index = (self.current_index + 1) % len(self.keys)
+        return key
 
-openai_manager = OpenAIKeyManager()
+# 초기화
+try:
+    openai_manager = OpenAIKeyManager()
+except Exception as e:
+    logging.critical(f"❌ OpenAI 초기화 실패: {str(e)}")
+    sys.exit(1)
 
