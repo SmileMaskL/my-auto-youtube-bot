@@ -4,6 +4,7 @@ import logging
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Logging 설정
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -11,7 +12,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # 파일과 환경 변수 정의
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 TOKEN_FILE = "token.json"
-CLIENT_SECRET_FILE = "client_secret.json"
 
 def authenticate_youtube_api():
     """YouTube API 인증 및 서비스 객체 반환 (OAuth 2.0 사용)"""
@@ -35,12 +35,8 @@ def authenticate_youtube_api():
         else:
             logging.info("No valid credentials found or refresh failed, starting authentication flow.")
             client_secret_json_str = os.getenv("YOUTUBE_CLIENT_SECRETS_JSON")
-            if not client_secret_json_str and os.path.exists(CLIENT_SECRET_FILE):
-                logging.info(f"Found local {CLIENT_SECRET_FILE}.")
-                client_secret_json_str = open(CLIENT_SECRET_FILE).read()
-            
             if not client_secret_json_str:
-                raise ValueError("Client secret JSON is required for authentication.")
+                raise ValueError("YOUTUBE_CLIENT_SECRETS_JSON environment variable is missing!")
 
             try:
                 config = json.loads(client_secret_json_str)
