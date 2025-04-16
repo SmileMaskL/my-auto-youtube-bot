@@ -1,14 +1,14 @@
-name: YouTube AutoBot Pro Ultra
+name: YouTube AutoBot Pro Max
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # 4시간 간격 실행
+    - cron: '0 */6 * * *'  # 6시간 간격 실행 (쿼터 관리)
   workflow_dispatch:
 
 jobs:
   automation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 120
 
     steps:
     - name: 코드 동기화
@@ -16,7 +16,7 @@ jobs:
 
     - name: 시스템 설정
       run: |
-        mkdir -p static/{videos,audio}
+        mkdir -p static/{videos,audio,logs}
         sudo apt-get install -y ffmpeg
 
     - name: 파이썬 환경
@@ -32,5 +32,5 @@ jobs:
         OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
-      run: python secure_main.py --auto
+      run: python main.py --auto
 
