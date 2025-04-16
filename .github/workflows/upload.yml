@@ -1,8 +1,8 @@
-name: YouTube AutoBot Pro Max
+name: YouTube AutoBot Pro Ultra
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # 6시간 간격 실행 (쿼터 관리)
+    - cron: '0 */4 * * *'  # 4시간 간격 실행 (쿼터 최적화)
   workflow_dispatch:
 
 jobs:
@@ -16,8 +16,8 @@ jobs:
 
     - name: 시스템 설정
       run: |
-        mkdir -p static/{videos,audio,logs}
-        sudo apt-get install -y ffmpeg
+        mkdir -p static/{videos,audio,thumbnails,logs}
+        sudo apt-get install -y ffmpeg libimage-exiftool-perl
 
     - name: 파이썬 환경
       uses: actions/setup-python@v4
@@ -32,5 +32,6 @@ jobs:
         OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
-      run: python main.py --auto
+      run: |
+        python secure_main.py --auto
 
