@@ -1,67 +1,119 @@
 import os
 import json
 import logging
+import time
+from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from trending import get_trending_topic
+from secure_generate_script import generate_script
+from secure_text_to_audio import text_to_speech
+from secure_generate_video import generate_video
+from youtube_uploader import upload_video_to_youtube, log_upload
+from quota_manager import quota_manager
 
-# Logging 설정
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# 환경 변수 설정
+CLIENT_SECRET_FILE = 'client_secret.json'
+TOKEN_FILE = 'token.json'
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
-# 파일과 환경 변수 정의
-SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
-TOKEN_FILE = "token.json"
+# 로그 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='secure_log.txt',
+    filemode='a'
+)
+logger = logging.getLogger(__name__)
 
 def authenticate_youtube_api():
-    """YouTube API 인증 및 서비스 객체 반환 (OAuth 2.0 사용)"""
+    """YouTube API 인증 및 서비스 객체 반환"""
     creds = None
-    if os.path.exists(TOKEN_FILE):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-            logging.info(f"Loaded credentials from {TOKEN_FILE}.")
-        except Exception as e:
-            logging.warning(f"Failed to load credentials from {TOKEN_FILE}: {e}")
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            logging.info("Credentials expired, attempting to refresh...")
-            try:
-                creds.refresh(Request())
-                logging.info("Credentials refreshed successfully.")
-            except Exception as e:
-                logging.error(f"Failed to refresh credentials: {e}. Need to re-authenticate.")
-                creds = None
-        else:
-            logging.info("No valid credentials found or refresh failed, starting authentication flow.")
-            client_secret_json_str = os.getenv("YOUTUBE_CLIENT_SECRETS_JSON")
-            if not client_secret_json_str:
-                raise ValueError("YOUTUBE_CLIENT_SECRETS_JSON environment variable is missing!")
-
-            try:
-                config = json.loads(client_secret_json_str)
-                flow = InstalledAppFlow.from_client_config(config, SCOPES)
-                creds = flow.run_local_server(port=8080)
-                logging.info("Authentication successful.")
-            except Exception as e:
-                logging.error(f"Error during authentication: {e}")
-                raise
-
-        if creds and creds.valid:
-            with open(TOKEN_FILE, "w") as token:
-                token.write(creds.to_json())
-                logging.info(f"Saved credentials to {TOKEN_FILE}.")
-        else:
-            raise ConnectionRefusedError("Failed to obtain valid credentials.")
-
     try:
-        youtube = build("youtube", "v3", credentials=creds)
-        logging.info("YouTube API service built successfully.")
-        return youtube
+        if os.path.exists(TOKEN_FILE):
+            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+            logger.info("Loaded existing credentials")
+
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                logger.info("Refreshing expired credentials")
+                creds.refresh(Request())
+            else:
+                logger.info("Starting new authentication flow")
+                client_secret_json = os.getenv('YOUTUBE_CLIENT_SECRETS_JSON')
+                if client_secret_json:
+                    client_config = json.loads(client_secret_json)
+                    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+                else:
+                    raise ValueError("Client secret not found in environment variables")
+                
+                if os.getenv('CI'):
+                    logger.info("Running in CI environment")
+                    token_json = os.getenv('GOOGLE_TOKEN_JSON')
+                    if token_json:
+                        creds = Credentials.from_authorized_user_info(json.loads(token_json))
+                else:
+                    creds = flow.run_local_server(port=8080, open_browser=False)
+
+            with open(TOKEN_FILE, 'w') as token:
+                token.write(creds.to_json())
+
+        return build('youtube', 'v3', credentials=creds)
     except Exception as e:
-        logging.error(f"Failed to build YouTube API service: {e}")
-        raise ConnectionRefusedError("Failed to build YouTube service.")
+        logger.error(f"Authentication failed: {str(e)}")
+        raise
+
+def main_workflow():
+    """전체 자동화 워크플로우 실행"""
+    logger.info("Starting automated workflow")
+    
+    try:
+        # 1. 트렌드 주제 수집
+        topic = get_trending_topic()
+        logger.info(f"Selected trending topic: {topic}")
+        
+        # 2. 스크립트 생성
+        script = generate_script(topic)
+        logger.info(f"Generated script: {script[:100]}...")
+        
+        # 3. 오디오 생성
+        audio_path = text_to_speech(
+            text=script,
+            voice_id=os.getenv('ELEVENLABS_VOICE_ID'),
+            output_folder="static/audio"
+        )
+        logger.info(f"Generated audio: {audio_path}")
+        
+        # 4. 영상 생성
+        video_path, thumbnail_path, duration = generate_video(
+            topic_title=topic,
+            audio_path=audio_path,
+            output_folder="static/video"
+        )
+        logger.info(f"Generated video: {video_path}")
+        
+        # 5. 유튜브 업로드
+        youtube = authenticate_youtube_api()
+        video_id = upload_video_to_youtube(
+            youtube=youtube,
+            file_path=video_path,
+            title=f"{topic} #Shorts",
+            description=f"{script}\n\n{SHORTS_HASHTAGS}",
+            thumbnail_path=thumbnail_path,
+            is_shorts=True
+        )
+        logger.info(f"Uploaded video ID: {video_id}")
+        
+        # 6. 업로드 로깅
+        log_upload(video_id, topic, script)
+        logger.info("Workflow completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Workflow failed: {str(e)}")
+        raise
 
 if __name__ == "__main__":
-    youtube = authenticate_youtube_api()
-    logging.info("YouTube API 인증 완료!")
+    main_workflow()
+
