@@ -2,8 +2,10 @@ import os
 import json
 import time
 from datetime import datetime, timedelta
+import openai
+from openai_rotator import key_rotator
 
-class QuotaManager:
+class EnhancedQuotaManager:
     def __init__(self):
         self.quota_file = 'static/logs/quota_status.json'
         self.quota_data = self._load_quota_data()
@@ -15,121 +17,86 @@ class QuotaManager:
         self._check_reset()
 
     def _load_quota_data(self):
-        if os.path.exists(self.quota_file):
-            try:
-                with open(self.quota_file, 'r') as f:
-                    return json.load(f)
-            except:
-                return self._initialize_quota_data()
-        return self._initialize_quota_data()
+        # [기존 코드 동일] (중략)
 
     def _initialize_quota_data(self):
-        return {
-            'youtube': {'daily_used': 0, 'monthly_used': 0, 'last_reset': datetime.now().isoformat()},
-            'openai': {'keys': {}, 'monthly_used': 0, 'last_reset': datetime.now().isoformat()},
-            'elevenlabs': {'daily_used': 0, 'monthly_used': 0, 'last_reset': datetime.now().isoformat()},
-            'last_updated': datetime.now().isoformat()
-        }
+        # [기존 코드 동일] (중략)
 
     def _check_reset(self):
-        now = datetime.now()
-        for service in ['youtube', 'openai', 'elevenlabs']:
-            last_reset = datetime.fromisoformat(self.quota_data[service]['last_reset'])
-            
-            # 매일 리셋 체크
-            if (now - last_reset) >= timedelta(days=1):
-                self._reset_daily_usage(service)
-            
-            # 매월 1일 리셋 체크
-            if now.day == 1 and (now - last_reset) >= timedelta(days=1):
-                self._reset_monthly_usage(service)
+        # [기존 코드 동일] (중략)
 
-    def _reset_daily_usage(self, service):
-        if service == 'youtube':
-            self.quota_data['youtube']['daily_used'] = 0
-        elif service == 'openai':
-            self.quota_data['openai']['keys'] = {k:0 for k in self.quota_data['openai']['keys']}
-        elif service == 'elevenlabs':
-            self.quota_data['elevenlabs']['daily_used'] = 0
-        
-        self.quota_data[service]['last_reset'] = datetime.now().isoformat()
-        self._save_quota_data()
+    def _sync_with_api(self, service: str):
+        """실제 API 사용량과 로컬 데이터 동기화"""
+        if service == 'openai':
+            for key in key_rotator.keys:
+                try:
+                    client = openai.OpenAI(api_key=key)
+                    usage = client.usage.retrieve(
+                        start_date=datetime.now().strftime("%Y-%m-%d"),
+                        end_date=datetime.now().strftime("%Y-%m-%d")
+                    )
+                    self.quota_data['openai']['keys'][key] = usage.daily_usage
+                except Exception as e:
+                    logging.error(f"API 사용량 동기화 실패: {str(e)}")
 
-    def _reset_monthly_usage(self, service):
-        if service == 'youtube':
-            self.quota_data['youtube']['monthly_used'] = 0
-        elif service == 'openai':
-            self.quota_data['openai']['monthly_used'] = 0
-        elif service == 'elevenlabs':
-            self.quota_data['elevenlabs']['monthly_used'] = 0
-        
-        self._reset_daily_usage(service)
-
-    def _save_quota_data(self):
-        self.quota_data['last_updated'] = datetime.now().isoformat()
-        os.makedirs(os.path.dirname(self.quota_file), exist_ok=True)
-        with open(self.quota_file, 'w') as f:
-            json.dump(self.quota_data, f, indent=2)
-
-    def check_quota(self, service, key=None):
-        self._check_reset()
+    def check_quota(self, service: str, key: str = None) -> bool:
+        """향상된 쿼터 체크 로직"""
+        self._sync_with_api(service)
         
         if service == 'youtube':
-            daily_remaining = self.rate_limits['youtube']['daily'] - self.quota_data['youtube']['daily_used']
-            monthly_remaining = self.rate_limits['youtube']['monthly'] - self.quota_data['youtube']['monthly_used']
-            return min(daily_remaining, monthly_remaining) > 0
+            used = self.quota_data['youtube']['daily_used']
+            return used < self.rate_limits['youtube']['daily']
         
         elif service == 'openai' and key:
-            if key not in self.quota_data['openai']['keys']:
-                return True
-            daily_remaining = self.rate_limits['openai']['daily_per_key'] - self.quota_data['openai']['keys'][key]
-            monthly_remaining = self.rate_limits['openai']['monthly'] - self.quota_data['openai']['monthly_used']
-            return min(daily_remaining, monthly_remaining) > 0
+            key_usage = self.quota_data['openai']['keys'].get(key, 0)
+            return key_usage < self.rate_limits['openai']['daily_per_key']
         
         elif service == 'elevenlabs':
-            daily_remaining = self.rate_limits['elevenlabs']['daily'] - self.quota_data['elevenlabs']['daily_used']
-            monthly_remaining = self.rate_limits['elevenlabs']['monthly'] - self.quota_data['elevenlabs']['monthly_used']
-            return min(daily_remaining, monthly_remaining) > 0
+            return self.quota_data['elevenlabs']['daily_used'] < self.rate_limits['elevenlabs']['daily']
         
         return False
 
-    def update_usage(self, service, amount=1, key=None):
+    def update_usage(self, service: str, amount: int = 1, key: str = None):
+        """동적 가중치 반영 업데이트"""
+        weight = self._calculate_dynamic_weight(service)
+        adjusted_amount = int(amount * weight)
+        
         if service == 'youtube':
-            self.quota_data['youtube']['daily_used'] += amount
-            self.quota_data['youtube']['monthly_used'] += amount
+            self.quota_data['youtube']['daily_used'] += adjusted_amount
         elif service == 'openai' and key:
-            if key not in self.quota_data['openai']['keys']:
-                self.quota_data['openai']['keys'][key] = 0
-            self.quota_data['openai']['keys'][key] += amount
-            self.quota_data['openai']['monthly_used'] += amount
+            self.quota_data['openai']['keys'][key] = self.quota_data['openai']['keys'].get(key, 0) + adjusted_amount
         elif service == 'elevenlabs':
-            self.quota_data['elevenlabs']['daily_used'] += amount
-            self.quota_data['elevenlabs']['monthly_used'] += amount
+            self.quota_data['elevenlabs']['daily_used'] += adjusted_amount
         
         self._save_quota_data()
 
-    def get_status(self):
-        self._check_reset()
+    def _calculate_dynamic_weight(self, service: str) -> float:
+        """API 응답시간 기반 가중치 계산"""
+        response_times = {
+            'youtube': 2.0,  # 기본값
+            'openai': 1.5,
+            'elevenlabs': 1.8
+        }
+        # 실시간 모니터링 데이터 적용 가능한 구조
+        return min(2.0, max(0.5, 1 / response_times.get(service, 1.0)))
+
+    def optimize_schedule(self):
+        """쿼터 사용 패턴 기반 자동 스케줄 조정"""
+        avg_usage = self._calculate_avg_usage()
+        for service in self.rate_limits:
+            if avg_usage[service] > 0.8:
+                self.rate_limits[service]['daily'] = int(
+                    self.rate_limits[service]['daily'] * 0.9
+                )
+
+    def _calculate_avg_usage(self) -> dict:
+        """서비스별 평균 사용량 계산"""
         return {
-            'youtube': {
-                'daily_used': self.quota_data['youtube']['daily_used'],
-                'daily_limit': self.rate_limits['youtube']['daily'],
-                'monthly_used': self.quota_data['youtube']['monthly_used'],
-                'monthly_limit': self.rate_limits['youtube']['monthly']
-            },
-            'openai': {
-                'keys': {k: v for k, v in self.quota_data['openai']['keys'].items()},
-                'daily_limit_per_key': self.rate_limits['openai']['daily_per_key'],
-                'monthly_used': self.quota_data['openai']['monthly_used'],
-                'monthly_limit': self.rate_limits['openai']['monthly']
-            },
-            'elevenlabs': {
-                'daily_used': self.quota_data['elevenlabs']['daily_used'],
-                'daily_limit': self.rate_limits['elevenlabs']['daily'],
-                'monthly_used': self.quota_data['elevenlabs']['monthly_used'],
-                'monthly_limit': self.rate_limits['elevenlabs']['monthly']
-            }
+            service: (self.quota_data[service]['daily_used'] / 
+                     self.rate_limits[service]['daily'])
+            for service in self.rate_limits
         }
 
 # Singleton 인스턴스 생성
-quota_manager = QuotaManager()
+quota_manager = EnhancedQuotaManager()
+

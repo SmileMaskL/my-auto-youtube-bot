@@ -1,31 +1,44 @@
-name: Upload Video
-
+# .github/workflows/upload.yml
+name: AutoUpload
 on:
   schedule:
-    - cron: '0 9 * * *'  # 매일 오전 9시에 실행
+    - cron: '0 9,15,21 * * *'  # 하루 3회 실행
   workflow_dispatch:
 
 jobs:
-  build-and-upload:
+  production:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Python 설정
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: 의존성 설치
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: 환경 변수 설정
-        run: |
-          echo "OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" >> .env
-          echo "YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" >> .env
-
-      - name: 영상 생성 및 업로드
-        run: python secure_main.py
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        
+    - name: Install Python packages
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Configure environment
+      env:
+        OPENAI_API_KEYS: ${{ secrets.OPENAI_KEYS }}
+        ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
+        GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
+      run: |
+        echo "OPENAI_API_KEYS=${OPENAI_API_KEYS}" >> .env
+        echo "ELEVENLABS_KEY=${ELEVENLABS_KEY}" >> .env
+        echo "GOOGLE_CREDS=${GOOGLE_CREDS}" >> .env
+        
+    - name: Run production
+      run: |
+        python secure_main.py
 
