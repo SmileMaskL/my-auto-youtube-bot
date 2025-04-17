@@ -4,7 +4,8 @@ import random
 from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
-from elevenlabs import Voice, VoiceSettings, generate, set_api_key
+from elevenlabs import Voice, VoiceSettings, set_api_key
+from elevenlabs.client import ElevenLabs  # 수정된 임포트
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from moviepy.editor import *
@@ -14,42 +15,44 @@ load_dotenv()
 
 class UltimateYouTubeAutomator:
     def __init__(self):
-        # 10개 OpenAI 키 순환 시스템
+        # OpenAI 키 로테이션 초기화
         self.openai_keys = os.getenv('OPENAI_KEYS').split(',')
-        self.current_key_index = random.randint(0,9)
+        self.current_key_index = random.randint(0, len(self.openai_keys)-1)
         self.max_retries = 5
         
-        # ElevenLabs 음성 보안 확인
+        # ElevenLabs 클라이언트 초기화
+        self.eleven_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_KEY'))  # 수정된 초기화
         self.voice_id = self._verify_elevenlabs_voice(os.getenv('ELEVENLABS_VOICE_ID'))
         
         # YouTube API 초기화
         self.youtube = build('youtube', 'v3', credentials=self._get_google_creds())
         
-        # 쿼터 관리 강화 시스템
+        # 쿼터 관리 시스템
         self.quota_tracker = {
             'openai': {'daily':0, 'monthly':0},
-            'youtube': {'daily':0, 'monthly':0}
+            'youtube': {'daily':0, 'monthly':0},
+            'elevenlabs': {'daily':0, 'monthly':0}
         }
         self.quota_limits = {
             'openai': {'daily': int(os.getenv('OPENAI_DAILY_LIMIT', 200)), 'monthly': 5000},
-            'youtube': {'daily': int(os.getenv('YT_DAILY_LIMIT', 100)), 'monthly': 3000}
+            'youtube': {'daily': int(os.getenv('YT_DAILY_LIMIT', 100)), 'monthly': 3000},
+            'elevenlabs': {'daily': 500, 'monthly': 15000}
         }
 
     def _verify_elevenlabs_voice(self, voice_id):
-        set_api_key(os.getenv('ELEVENLABS_KEY'))
         try:
-            voice = Voice.from_id(voice_id)
+            voice = self.eleven_client.voices.get(voice_id)
             if not voice.settings.public:
-                raise Exception("음성 설정이 비공개 상태입니다. ElevenLabs 대시보드에서 공개로 변경 필요")
+                raise Exception("음성 설정 공개 필요")
             return voice_id
         except Exception as e:
-            print(f"ElevenLabs 오류: {str(e)}")
+            print(f"🔊 ElevenLabs 오류: {str(e)}")
             exit(1)
 
     def _rotate_openai_key(self):
         self.current_key_index = (self.current_key_index + 1) % len(self.openai_keys)
         os.environ['OPENAI_API_KEY'] = self.openai_keys[self.current_key_index]
-        print(f"🔑 키 로테이션 완료: 현재 키 인덱스 {self.current_key_index+1}/{len(self.openai_keys)}")
+        print(f"🔄 키 로테이션 완료: {self.current_key_index+1}번 키 사용")
 
     def _get_google_creds(self):
         return Credentials.from_authorized_user_info({
@@ -67,7 +70,10 @@ class UltimateYouTubeAutomator:
     def _auto_thumbnail(self, title):
         img = Image.new('RGB', (1280, 720), color=(73, 109, 137))
         d = ImageDraw.Draw(img)
-        font = ImageFont.truetype("malgun.ttf", 40)
+        try:
+            font = ImageFont.truetype("malgun.ttf", 40)
+        except:
+            font = ImageFont.load_default()
         d.text((100,300), title[:50], fill=(255,255,255), font=font)
         img.save("thumbnail.jpg")
         return "thumbnail.jpg"
@@ -81,7 +87,7 @@ class UltimateYouTubeAutomator:
                     model="gpt-4-turbo",
                     messages=[{
                         "role": "system",
-                        "content": f"{os.getenv('TREND_KEYWORDS')} 키워드 기반 YouTube 시나리오 작성. 한국어로 500자 이상"
+                        "content": f"{os.getenv('TREND_KEYWORDS')} 주제로 한국어 500자 이상 YouTube 스크립트 생성"
                     }]
                 )
                 self.quota_tracker['openai']['daily'] += 1
@@ -90,12 +96,13 @@ class UltimateYouTubeAutomator:
             except Exception as e:
                 if "quota" in str(e).lower():
                     self._rotate_openai_key()
-                print(f"시도 {attempt+1} 실패: {str(e)}")
+                print(f"🔄 시도 {attempt+1} 실패: {str(e)}")
                 time.sleep(2**attempt)
         raise Exception("스크립트 생성 최종 실패")
 
     def text_to_speech(self, text):
-        audio = generate(
+        self._quota_check('elevenlabs')
+        audio = self.eleven_client.generate(  # 수정된 메서드
             text=text,
             voice=Voice(
                 voice_id=self.voice_id,
@@ -105,11 +112,13 @@ class UltimateYouTubeAutomator:
         )
         with open("audio.mp3", "wb") as f:
             f.write(audio)
+        self.quota_tracker['elevenlabs']['daily'] += 1
+        self.quota_tracker['elevenlabs']['monthly'] += 1
         return "audio.mp3"
 
     def create_shorts(self, content):
         clip = VideoFileClip("shorts_template.mp4").subclip(0,15)
-        txt_clip = TextClip(content[:100], fontsize=40, color='white', font='malgun').set_position('center').set_duration(15)
+        txt_clip = TextClip(content[:100], fontsize=40, color='white').set_position('center').set_duration(15)
         final = CompositeVideoClip([clip, txt_clip])
         final.write_videofile("shorts.mp4", fps=24, codec='libx264')
 
@@ -134,7 +143,7 @@ class UltimateYouTubeAutomator:
         return response['id']
 
     def auto_comment(self, video_id):
-        comment = "🤖 자동 생성 댓글: 콘텐츠가 유익하네요! 더 많은 영상 기대합니다!"
+        comment = "🤖 자동 댓글: 유익한 콘텐츠 감사합니다!"
         self.youtube.commentThreads().insert(
             part="snippet",
             body={
@@ -167,20 +176,25 @@ class UltimateYouTubeAutomator:
             main_video_id = self.upload_video("final_video.mp4")
             shorts_video_id = self.upload_video("shorts.mp4", is_shorts=True)
             
-            # 5. 후처리 작업
+            # 5. 후속 작업
             self.auto_comment(main_video_id)
-            print(f"✅ 업로드 완료: 메인 영상 {main_video_id} | 쇼츠 {shorts_video_id}")
+            print(f"✅ 업로드 완료: 메인({main_video_id}) | 쇼츠({shorts_video_id})")
+            
+            # 6. 쿼터 상태 보고
+            print(f"📊 현재 쿼터 사용량: "
+                  f"OpenAI {self.quota_tracker['openai']['daily']}/{self.quota_limits['openai']['daily']} | "
+                  f"YouTube {self.quota_tracker['youtube']['daily']}/{self.quota_limits['youtube']['daily']}")
             
         except Exception as e:
-            print(f"⚠️ 크리티컬 에러: {str(e)}")
-            print("재시도 대기 중...")
-            time.sleep(60)
+            print(f"⚠️ 에러 발생: {str(e)}")
+            print("🔄 3분 후 재시도...")
+            time.sleep(180)
             self.full_workflow()
 
 if __name__ == "__main__":
     bot = UltimateYouTubeAutomator()
     for i in range(int(os.getenv('DAILY_VIDEOS', 8))):
-        print(f"\n🔥 {i+1}번째 영상 생성 시작")
+        print(f"\n🔥 [{datetime.now().strftime('%H:%M:%S')}] {i+1}번째 작업 시작")
         bot.full_workflow()
         time.sleep(3600//int(os.getenv('DAILY_VIDEOS',8)))
 
