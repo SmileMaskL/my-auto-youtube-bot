@@ -1,7 +1,7 @@
-name: Ultimate Auto Upload
+name: Auto Upload
 on:
   schedule:
-    - cron: "0 0,6,12,18 * * *"  # 6시간 간격 실행
+    - cron: "0 */6 * * *"  # 6시간 간격
   workflow_dispatch:
 
 jobs:
@@ -11,32 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
           
-      - name: Install system dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get install ffmpeg -y
-          sudo apt-get install libgl1 -y
-          
-      - name: Install Python packages
-        run: |
           pip install -r requirements.txt
-          pip install python-dotenv==1.0.0
           
       - name: Run Automation
         env:
           OPENAI_KEYS: ${{ secrets.OPENAI_KEYS }}
           ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.VOICE_ID }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CSECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_RTOKEN }}
+          GOOGLE_CID: ${{ secrets.GOOGLE_CID }}
+          GOOGLE_CSECRET: ${{ secrets.GOOGLE_CSECRET }}
+          GOOGLE_RTOKEN: ${{ secrets.GOOGLE_RTOKEN }}
           TREND_KEYWORDS: ${{ secrets.TRENDS }}
           DAILY_VIDEOS: ${{ secrets.VIDEO_COUNT }}
-          OPENAI_DAILY_LIMIT: ${{ secrets.OPENAI_LIMIT}}
-          YT_DAILY_LIMIT: ${{ secrets.YT_LIMIT }}
         run: python secure_main.py
 
