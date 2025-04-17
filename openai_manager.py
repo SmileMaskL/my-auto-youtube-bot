@@ -33,54 +33,23 @@ class OpenAIManager:
         
         keys = [k.strip() for k in key_str.split(';') if k.startswith('sk-')]
         
-        if len(keys) < 5:  # 최소 5개 키 요구
-            logging.critical(f"⚠️ 키 개수 부족: {len(keys)}/5 (최소 5개 필요, 권장 10개)")
+        if len(keys) < 5:
+            logging.critical(f"⚠️ 키 개수 부족: {len(keys)}/5 (최소 5개 필요)")
             sys.exit(1)
             
         logging.info(f"✅ 키 검증 완료: {len(keys)}개")
         return keys
 
     def get_valid_key(self) -> str:
-        """유효한 키를 찾아 반환 (로테이션 + 쿼터 확인)"""
-        attempts = 0
-        max_attempts = len(self.keys) * 2  # 모든 키를 두 번씩 시도
-        
-        while attempts < max_attempts:
+        """로테이션 알고리즘 개선 버전"""
+        for _ in range(len(self.keys)):
             key = self.keys[self.current_index]
             self.current_index = (self.current_index + 1) % len(self.keys)
             
-            # 실패한 키는 건너뛰기
-            if key in self.failed_keys:
-                attempts += 1
-                continue
-                
-            # 쿼터 확인
-            if quota_manager.check_quota('openai', key):
-                logging.debug(f"🔄 {self.current_index+1}번째 키 사용 (쿼터 여유 있음)")
+            if key not in self.failed_keys and quota_manager.check_quota('openai', key):
                 return key
-            else:
-                logging.warning(f"⚠️ {self.current_index+1}번째 키 쿼터 초과. 다음 키 시도")
-                self.failed_keys.add(key)
                 
-            attempts += 1
-            
-        logging.error("🚨 사용 가능한 OpenAI 키가 없습니다. 모든 키의 쿼터가 소진되었거나 유효하지 않습니다.")
+        logging.error("🚨 사용 가능한 OpenAI 키가 없습니다")
         raise RuntimeError("No valid OpenAI keys available")
 
-    def report_key_failure(self, key: str):
-        """실패한 키 보고"""
-        if key in self.keys:
-            self.failed_keys.add(key)
-            logging.warning(f"⚠️ 키 실패 보고: {key[:5]}...{key[-5:]} (실패 키 수: {len(self.failed_keys)})")
-
-    def get_active_key_count(self) -> int:
-        """활성 키 수 반환"""
-        return len([k for k in self.keys if k not in self.failed_keys])
-
-    def reset_failed_keys(self):
-        """실패한 키 리셋 (매일 자정에 실행 권장)"""
-        self.failed_keys = set()
-        logging.info("✅ 실패한 키 기록 초기화 완료")
-
-# Singleton 인스턴스 생성
 openai_manager = OpenAIManager()

@@ -2,7 +2,7 @@ name: YouTube AutoBot Pro Ultra
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # 6시간 간격 실행 (쿼터 최적화)
+    - cron: '0 */6 * * *'  # 6시간 간격 실행
   workflow_dispatch:
 
 jobs:
@@ -19,25 +19,22 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg python3-pip
-
-    - name: Install Python dependencies
-      run: |
+        sudo apt-get install -y ffmpeg
+        pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pydantic==1.10.13  # 명시적으로 Pydantic 버전 지정
 
-    - name: Create necessary directories
+    - name: Create directories
       run: |
         mkdir -p static/{videos,audio,thumbnails,logs}
 
-    - name: Run YouTube AutoBot
+    - name: Run AutoBot
       env:
-        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
         YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
       run: |
