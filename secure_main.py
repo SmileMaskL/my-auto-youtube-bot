@@ -1,17 +1,28 @@
+import os
+from dotenv import load_dotenv
 from openai_manager import get_available_api_key
+from video_generator import generate_video
+from text_to_speech import generate_speech
+from youtube_uploader import upload_video
 
 def main():
-    try:
-        # API 키를 가져옵니다.
-        api_key = get_available_api_key()
-        print(f"사용 가능한 API 키: {api_key}")
+    load_dotenv()
+    api_key = get_available_api_key()
+    if not api_key:
+        print("사용 가능한 API 키가 없습니다.")
+        return
 
-        # API 키를 사용하여 필요한 작업을 수행합니다.
-        # 예시: OpenAI API 호출 등
-        # api_response = some_api_call(api_key)
+    # 텍스트 생성
+    script_text = "오늘의 뉴스 헤드라인입니다."
 
-    except Exception as e:
-        print(f"오류 발생: {e}")
+    # 음성 생성
+    audio_file = generate_speech(script_text, api_key)
+
+    # 영상 생성
+    video_file, thumbnail_file = generate_video(script_text, audio_file)
+
+    # 유튜브 업로드
+    upload_video(video_file, thumbnail_file, script_text)
 
 if __name__ == "__main__":
     main()

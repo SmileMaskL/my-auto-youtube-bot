@@ -1,27 +1,31 @@
-name: Upload YouTube Video
+name: Upload Video
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'  # 매 6시간마다 실행
+    - cron: '0 9 * * *'  # 매일 오전 9시에 실행
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Python 설정
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
-      - name: Install dependencies
+      - name: 의존성 설치
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt update && sudo apt install -y ffmpeg
 
-      - name: Run automation
+      - name: 환경 변수 설정
         run: |
-          python secure_main.py --auto --max-videos 2
+          echo "OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" >> .env
+          echo "YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" >> .env
+
+      - name: 영상 생성 및 업로드
+        run: python secure_main.py
 
