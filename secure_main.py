@@ -30,7 +30,7 @@ logging.basicConfig(
 class YouTubeAutoBot:
     def __init__(self):
         self._setup_directories()
-        self.max_daily_videos = 3  # 하루 최대 영상 수
+        self.max_daily_videos = 3
         self.video_counter = 0
         self.session_start = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -119,16 +119,6 @@ class YouTubeAutoBot:
             logging.error(f"유튜브 업로드 실패: {str(e)}")
             return None
 
-    def _cleanup(self, *file_paths):
-        """임시 파일 정리"""
-        for path in file_paths:
-            if path and os.path.exists(path):
-                try:
-                    os.remove(path)
-                    logging.info(f"임시 파일 삭제: {path}")
-                except Exception as e:
-                    logging.error(f"파일 삭제 실패: {path} - {str(e)}")
-
     def run_pipeline(self) -> bool:
         """전체 프로세스 실행"""
         if self.video_counter >= self.max_daily_videos:
@@ -168,9 +158,6 @@ class YouTubeAutoBot:
             video_id = self._upload_to_youtube(video_path, title, description, thumbnail_path)
             if not video_id:
                 return False
-
-            # 6. 임시 파일 정리 (선택적)
-            self._cleanup(audio_path)
 
             self.video_counter += 1
             logging.info(f"성공적으로 파이프라인 완료! (오늘 생성 영상: {self.video_counter}/{self.max_daily_videos})")
