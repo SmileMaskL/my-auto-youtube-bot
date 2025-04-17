@@ -1,41 +1,34 @@
-name: YouTube AutoBot Pro Ultra
+name: Upload YouTube Video
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # 6시간 간격 실행
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # 6시간마다 실행
 
 jobs:
-  automation:
+  upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-        pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
 
-    - name: Create directories
-      run: |
-        mkdir -p static/{videos,audio,thumbnails,logs}
+      - name: Run uploader
+        env:
+          OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
+          ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+        run: |
+          python secure_main.py --auto --max-videos 2
 
-    - name: Run AutoBot
-      env:
-        ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
-        ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
-        GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
-        YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
-      run: |
-        python secure_main.py --auto --max-videos 3

@@ -1,98 +1,43 @@
 import os
-import json
-import logging
-import time
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from quota_manager import quota_manager
+import random
+from thumbnail_generator import create_thumbnail
+from shorts_converter import convert_to_shorts
+from comment_generator import generate_comment
+from text_to_speech import text_to_speech
+from video_generator import generate_video
+from youtube_upload import upload_video
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('static/logs/youtube_upload.log'),
-        logging.StreamHandler()
-    ]
-)
+def run(auto=False, max_videos=1):
+    for i in range(max_videos):
+        print(f"[{i+1}] 콘텐츠 생성 시작")
 
-class YouTubeUploader:
-    SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
-    API_SERVICE_NAME = 'youtube'
-    API_VERSION = 'v3'
-    
-    def __init__(self):
-        self.credentials = self._get_credentials()
-        self.youtube = self._get_youtube_service()
-        self.max_retries = 3
+        # 1. 스크립트 생성
+        script = f"오늘의 트렌드 내용입니다. 랜덤 값: {random.randint(100, 999)}"
 
-    def _get_credentials(self):
-        """자격증명 로드 (수정된 버전)"""
-        try:
-            creds_json = os.getenv('GOOGLE_CREDS')
-            if creds_json:
-                return Credentials.from_authorized_user_info(json.loads(creds_json), self.SCOPES)
-            
-            secrets_json = os.getenv('YOUTUBE_CLIENT_SECRETS_JSON')
-            if secrets_json:
-                return Credentials.from_authorized_user_info(json.loads(secrets_json), self.SCOPES)
-                
-            raise ValueError("No valid credentials found")
-        except Exception as e:
-            logging.error(f"자격증명 로드 실패: {e}")
-            raise
+        # 2. 음성 변환
+        audio_path = text_to_speech(script)
 
-    def _get_youtube_service(self):
-        """YouTube 서비스 생성"""
-        if not self.credentials:
-            raise ValueError("유효한 자격증명이 없습니다")
-        return build(self.API_SERVICE_NAME, self.API_VERSION, credentials=self.credentials)
+        # 3. 영상 생성
+        video_path = generate_video(audio_path, script)
 
-    def upload_video(self, video_path: str, title: str, description: str, thumbnail_path: str) -> str:
-        """업로드 로직 (에러 처리 강화)"""
-        for attempt in range(1, self.max_retries+1):
-            try:
-                if not quota_manager.check_quota('youtube'):
-                    raise RuntimeError("YouTube API quota exceeded")
-                
-                body = {
-                    'snippet': {
-                        'title': title[:100],  # 제한 길이 적용
-                        'description': description[:5000],
-                        'tags': ['AI', '자동생성', '쇼츠'],
-                        'categoryId': '28'
-                    },
-                    'status': {
-                        'privacyStatus': 'public',
-                        'selfDeclaredMadeForKids': False
-                    }
-                }
+        # 4. 썸네일 생성
+        thumbnail_path = create_thumbnail(script)
 
-                media = MediaFileUpload(video_path, chunksize=1024*1024, resumable=True)
-                request = self.youtube.videos().insert(
-                    part='snippet,status',
-                    body=body,
-                    media_body=media
-                )
+        # 5. Shorts 변환
+        shorts_path = convert_to_shorts(video_path)
 
-                response = None
-                while response is None:
-                    status, response = request.next_chunk()
-                    if status:
-                        logging.info(f"업로드 진행률: {int(status.progress() * 100)}%")
+        # 6. 댓글 생성
+        comment_text = generate_comment(script)
 
-                video_id = response['id']
-                self._upload_thumbnail(video_id, thumbnail_path)
-                self._add_comment(video_id, "이 영상은 AI로 자동 생성되었습니다. 👍")
-                
-                quota_manager.update_usage('youtube', 1600)
-                return video_id
+        # 7. 업로드
+        upload_video(
+            title="자동 생성 영상",
+            description="이 영상은 자동으로 생성되었습니다.\n" + comment_text,
+            video_path=shorts_path,
+            thumbnail_path=thumbnail_path
+        )
 
-            except Exception as e:
-                logging.warning(f"시도 {attempt} 실패: {str(e)}")
-                if attempt == self.max_retries:
-                    raise
-                time.sleep(attempt * 5)
+        print(f"[{i+1}] 완료 ✅\n")
 
-youtube_uploader = YouTubeUploader()
+    print("🎉 모든 영상 자동 생성 및 업로드 완료!")
+
