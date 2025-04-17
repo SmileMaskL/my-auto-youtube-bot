@@ -1,22 +1,32 @@
-name: Advanced Auto Upload
+name: Ultimate Auto Upload
 on:
   schedule:
-    - cron: "0 8,12,16,20 * * *"  # 4회/일 실행
+    - cron: "0 0,6,12,18 * * *"  # 6시간 간격 실행
   workflow_dispatch:
 
 jobs:
-  execute:
+  automation:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Execute Bot
+          
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install ffmpeg -y
+          sudo apt-get install libgl1 -y
+          
+      - name: Install Python packages
+        run: |
+          pip install -r requirements.txt
+          pip install python-dotenv==1.0.0
+          
+      - name: Run Automation
         env:
           OPENAI_KEYS: ${{ secrets.OPENAI_KEYS }}
           ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
@@ -25,6 +35,8 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CSECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_RTOKEN }}
           TREND_KEYWORDS: ${{ secrets.TRENDS }}
-          DAILY_VIDEOS: ${{ secrets.DAILY_COUNT }}
-        run: python main.py
+          DAILY_VIDEOS: ${{ secrets.VIDEO_COUNT }}
+          OPENAI_DAILY_LIMIT: ${{ secrets.OPENAI_LIMIT}}
+          YT_DAILY_LIMIT: ${{ secrets.YT_LIMIT }}
+        run: python secure_main.py
 
