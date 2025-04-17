@@ -25,7 +25,9 @@ jobs:
         sudo apt-get install -y ffmpeg python3-pip
 
     - name: Install Python dependencies
-      run: pip install -r requirements.txt
+      run: |
+        pip install -r requirements.txt
+        pip install pydantic==1.10.13  # 명시적으로 Pydantic 버전 지정
 
     - name: Create necessary directories
       run: |
@@ -39,4 +41,4 @@ jobs:
         GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
         YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
       run: |
-        python secure_main.py --auto
+        python secure_main.py --auto --max-videos 3

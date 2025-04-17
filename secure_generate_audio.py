@@ -2,10 +2,11 @@ import os
 import logging
 import hashlib
 import time
+import json
 from typing import Optional
-from elevenlabs import generate, set_api_key, voices
 from quota_manager import quota_manager
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -21,8 +22,9 @@ logging.basicConfig(
 class AudioGenerator:
     def __init__(self):
         self.voice_id = os.getenv('ELEVENLABS_VOICE_ID')
+        self.api_key = os.getenv('ELEVENLABS_KEY')
         self.max_retries = 3
-        self.timeout = 300  # 5분
+        self.timeout = 300
         self._validate_voice_id()
 
     def _validate_voice_id(self):
@@ -31,15 +33,9 @@ class AudioGenerator:
             logging.error("ELEVENLABS_VOICE_ID 환경 변수가 설정되지 않았습니다.")
             raise ValueError("ELEVENLABS_VOICE_ID is required")
 
-        set_api_key(os.getenv('ELEVENLABS_KEY'))
-        try:
-            voice_list = voices()
-            if not any(v.voice_id == self.voice_id for v in voice_list):
-                logging.error(f"Voice ID {self.voice_id}가 ElevenLabs 계정에 존재하지 않습니다.")
-                raise ValueError("Invalid voice ID")
-        except Exception as e:
-            logging.error(f"Voice ID 검증 실패: {str(e)}")
-            raise
+        if not self.api_key:
+            logging.error("ELEVENLABS_KEY 환경 변수가 설정되지 않았습니다.")
+            raise ValueError("ELEVENLABS_KEY is required")
 
     def _get_audio_filename(self, text: str) -> str:
         """텍스트 해시를 기반으로 오디오 파일명 생성"""
@@ -70,17 +66,31 @@ class AudioGenerator:
             try:
                 logging.info(f"시도 {attempt + 1}: 오디오 생성 (길이: {len(text)}자)")
 
-                set_api_key(os.getenv('ELEVENLABS_KEY'))
-                
-                audio = generate(
-                    text=text,
-                    voice=self.voice_id,
-                    model="eleven_multilingual_v2",
+                headers = {
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": self.api_key
+                }
+
+                data = {
+                    "text": text,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.7,
+                        "similarity_boost": 0.8
+                    }
+                }
+
+                response = requests.post(
+                    f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}",
+                    json=data,
+                    headers=headers,
                     timeout=self.timeout
                 )
+                response.raise_for_status()
 
                 with open(output_path, 'wb') as f:
-                    f.write(audio)
+                    f.write(response.content)
 
                 # 쿼터 업데이트 (문자 단위)
                 quota_manager.update_usage('elevenlabs', len(text))
@@ -92,7 +102,7 @@ class AudioGenerator:
                 logging.error(f"시도 {attempt + 1} 실패: {str(e)}")
                 if attempt == self.max_retries - 1:
                     raise
-                time.sleep(5 * (attempt + 1))  # 지수 백오프
+                time.sleep(5 * (attempt + 1))
 
         return None
 

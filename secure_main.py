@@ -170,7 +170,7 @@ class YouTubeAutoBot:
                 return False
 
             # 6. 임시 파일 정리 (선택적)
-            # self._cleanup(audio_path)
+            self._cleanup(audio_path)
 
             self.video_counter += 1
             logging.info(f"성공적으로 파이프라인 완료! (오늘 생성 영상: {self.video_counter}/{self.max_daily_videos})")

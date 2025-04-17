@@ -5,10 +5,11 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 openai==1.16.2
 pytrends==4.9.2
-elevenlabs==0.2.12
+elevenlabs==0.2.31
 requests==2.31.0
 ffmpeg-python==0.2.0
 Pillow==10.3.0
 numpy==1.26.4
 tqdm==4.66.2
 google-auth>=2.28.0
+pydantic==1.10.13
