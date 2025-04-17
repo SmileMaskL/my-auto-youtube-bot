@@ -1,54 +1,17 @@
-import os
-import sys
-import logging
-from typing import List
-from quota_manager import quota_manager
+from openai_key_manager import key_manager
+from api_usage_tracker import APIUsageTracker
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# API 사용 추적 객체를 생성합니다.
+usage_tracker = APIUsageTracker()
 
-class OpenAIManager:
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(OpenAIManager, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-    
-    def __init__(self):
-        if self._initialized:
-            return
-        self._initialized = True
-        self.keys = self._load_keys()
-        self.current_index = 0
-        self.failed_keys = set()
-        logging.info(f"🔑 OpenAI 키 관리자 초기화 완료. 활성 키: {len(self.keys)}개")
+def get_available_api_key():
+    # 모든 키를 확인하여 사용할 수 있는 키를 찾아 반환합니다.
+    for _ in range(len(key_manager.api_keys)):
+        api_key = key_manager.get_key()
+        if not usage_tracker.is_quota_exceeded(api_key):
+            usage_tracker.increment_usage(api_key)
+            return api_key
+    raise Exception("All API keys have exceeded their quota.")
 
-    def _load_keys(self) -> List[str]:
-        """환경 변수에서 키 로드 (강력한 검증)"""
-        key_str = os.getenv('OPENAI_API_KEYS')
-        if not key_str:
-            logging.critical("❌ .env 또는 GitHub Secrets에 OPENAI_API_KEYS가 없습니다!")
-            sys.exit(1)
-        
-        keys = [k.strip() for k in key_str.split(';') if k.startswith('sk-')]
-        if len(keys) < 5:
-            logging.critical(f"⚠️ 키 개수 부족: {len(keys)}/5 (최소 5개 필요)")
-            sys.exit(1)
-            
-        logging.info(f"✅ 키 검증 완료: {len(keys)}개")
-        return keys
+# 여기에 추가적으로 사용할 함수가 있을 경우 계속 추가하세요.
 
-    def get_valid_key(self) -> str:
-        """로테이션 + 쿼터 체크"""
-        for _ in range(len(self.keys)):
-            key = self.keys[self.current_index]
-            self.current_index = (self.current_index + 1) % len(self.keys)
-            
-            if key not in self.failed_keys and quota_manager.check_quota('openai', key):
-                return key
-                
-        logging.error("🚨 사용 가능한 OpenAI 키가 없습니다")
-        raise RuntimeError("No valid OpenAI keys available")
-
-openai_manager = OpenAIManager()
