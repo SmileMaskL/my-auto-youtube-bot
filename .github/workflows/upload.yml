@@ -1,35 +1,32 @@
+# .github/workflows/upload.yml
 name: Auto Upload
 on:
   schedule:
-    - cron: "0 */6 * * *"  # 6시간 간격
-  workflow_dispatch:
-
+    - cron: "0 0,6,12,18 * * *"  # 6시간 간격 실행
 jobs:
-  automation:
+  upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          sudo apt-get install ffmpeg -y
-          pip install -r requirements.txt
-          
+          pip install --upgrade pip
+          pip install pydantic==2.5.3 elevenlabs==1.56.1 moviepy==1.0.3 python-dotenv==1.0.0
       - name: Run Automation
         env:
           OPENAI_KEYS: ${{ secrets.OPENAI_KEYS }}
           ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ secrets.VOICE_ID }}
-          GOOGLE_CID: ${{ secrets.GOOGLE_CID }}
-          GOOGLE_CSECRET: ${{ secrets.GOOGLE_CSECRET }}
-          GOOGLE_RTOKEN: ${{ secrets.GOOGLE_RTOKEN }}
-          TREND_KEYWORDS: ${{ secrets.TRENDS }}
-          DAILY_VIDEOS: ${{ secrets.VIDEO_COUNT }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          TREND_KEYWORDS: ${{ secrets.TREND_KEYWORDS }}
+          VIDEO_PREFIX: ${{ secrets.VIDEO_PREFIX }}
+          DEFAULT_COMMENT: ${{ secrets.DEFAULT_COMMENT }}
+          DAILY_VIDEOS: 8 
         run: python secure_main.py
 
