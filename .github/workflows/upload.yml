@@ -3,32 +3,25 @@ name: Upload YouTube Video
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'  # 6시간마다 실행
+    - cron: '0 */6 * * *'  # 매 6시간마다 실행
 
 jobs:
-  upload:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          sudo apt update && sudo apt install -y ffmpeg
 
-      - name: Run uploader
-        env:
-          OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
-          ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+      - name: Run automation
         run: |
           python secure_main.py --auto --max-videos 2
 

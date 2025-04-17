@@ -1,52 +1,31 @@
 import os
+import argparse
 from dotenv import load_dotenv
-import openai
-from youtube_uploader import youtube_uploader
+from openai_manager import get_openai_response
+from text_to_speech import text_to_speech
+from secure_generate_video import generate_video
+from youtube_uploader import upload_video
+from thumbnail_generator import generate_thumbnail
 
 load_dotenv()
 
-# API 키 로테이션을 위한 클래스
-class APIKeyManager:
-    def __init__(self, keys):
-        self.keys = keys
-        self.index = 0
+def generate_script(topic="AI 트렌드 요약"):
+    prompt = f"{topic}에 대해 한국어로 유튜브 영상 대본을 써줘. 짧고 명확하게."
+    result = get_openai_response(prompt)
+    return result['choices'][0]['text'].strip()
 
-    def get_key(self):
-        return self.keys[self.index]
+def main(auto=False, max_videos=1):
+    for _ in range(max_videos):
+        script = generate_script()
+        audio_path = text_to_speech(script)
+        video_path = generate_video(audio_path)
+        thumbnail_path = generate_thumbnail(script)
+        upload_video(video_path, script, "자동 생성 영상입니다.", thumbnail_path)
 
-    def rotate_key(self):
-        self.index = (self.index + 1) % len(self.keys)
-        openai.api_key = self.get_key()
-
-openai_keys = os.getenv("OPENAI_API_KEYS")
-if not openai_keys:
-    raise ValueError("OPENAI_API_KEYS 가 .env에 설정되지 않았습니다.")
-
-key_manager = APIKeyManager(openai_keys.split(","))
-openai.api_key = key_manager.get_key()
-
-# 오류 발생 시 키 교체 후 재시도
-def safe_openai_call(prompt):
-    try:
-        return openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except openai.error.RateLimitError:
-        print("RateLimitError 발생, 다음 키로 교체")
-        key_manager.rotate_key()
-        return safe_openai_call(prompt)
-
-# 자동 실행 설정
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--auto", action="store_true", help="자동 실행 여부")
+    parser.add_argument("--auto", action="store_true")
     parser.add_argument("--max-videos", type=int, default=1)
     args = parser.parse_args()
-
-    youtube_uploader.run(
-        auto=args.auto,
-        max_videos=args.max_videos
-    )
+    main(args.auto, args.max_videos)
 
