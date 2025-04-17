@@ -1,31 +1,18 @@
 import os
-import argparse
-from dotenv import load_dotenv
-from openai_manager import get_openai_response
-from text_to_speech import text_to_speech
-from secure_generate_video import generate_video
-from youtube_uploader import upload_video
-from thumbnail_generator import generate_thumbnail
+from youtube_upload import upload_video, post_comment_to_video
+from secure_generate_video import generate_video, convert_to_shorts_format
 
-load_dotenv()
+def main():
+    print("\n✅ 트렌드 기반 영상 생성 시작")
+    video_path = generate_video()
 
-def generate_script(topic="AI 트렌드 요약"):
-    prompt = f"{topic}에 대해 한국어로 유튜브 영상 대본을 써줘. 짧고 명확하게."
-    result = get_openai_response(prompt)
-    return result['choices'][0]['text'].strip()
+    shorts_path = "output/final_shorts.mp4"
+    convert_to_shorts_format(video_path, shorts_path)
 
-def main(auto=False, max_videos=1):
-    for _ in range(max_videos):
-        script = generate_script()
-        audio_path = text_to_speech(script)
-        video_path = generate_video(audio_path)
-        thumbnail_path = generate_thumbnail(script)
-        upload_video(video_path, script, "자동 생성 영상입니다.", thumbnail_path)
+    print("\n✅ 유튜브 업로드 시작")
+    video_id = upload_video(shorts_path, "[트렌드] 오늘의 짧은 영상", "대한민국 트렌드 기반 Shorts 영상입니다.", ["Shorts", "트렌드"])
+
+    post_comment_to_video(video_id, "시청해주셔서 감사합니다! 더 많은 트렌드 영상 기대해주세요 😊")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--auto", action="store_true")
-    parser.add_argument("--max-videos", type=int, default=1)
-    args = parser.parse_args()
-    main(args.auto, args.max_videos)
-
+    main()
